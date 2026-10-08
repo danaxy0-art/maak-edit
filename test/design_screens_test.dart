@@ -165,10 +165,12 @@ void main() {
           'The uploaded verification document is unclear. Please upload a readable copy.',
     ),
     'reject_dialog': const Scaffold(
-      body: RejectApplicationDialog(
-        userId: '00000000-0000-0000-0000-000000000001',
-      ),
-    ),
+  body: RejectApplicationDialog(
+    userId: '00000000-0000-0000-0000-000000000001',
+    email: 'volunteer@example.com',
+    name: 'Test Volunteer',
+  ),
+),
   };
   for (final entry in screens.entries) {
     testWidgets('${entry.key} renders at mobile size without overflow', (

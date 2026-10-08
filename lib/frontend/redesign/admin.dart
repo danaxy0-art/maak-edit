@@ -604,8 +604,23 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
       await SupabaseService.approveVolunteerApplication(
         widget.application['user_id'] as String,
       );
+
+      try {
+  final profile = widget.application['profiles'] as Map?;
+
+  await SupabaseService.sendVolunteerEmail(
+    email: profile?['email'] as String? ?? '',
+    name: profile?['full_name'] as String? ?? 'Volunteer',
+    status: 'approved',
+  );
+} catch (e) {
+  debugPrint('Volunteer approval email failed: $e');
+}
+
       if (mounted) {
-        showSuccess(context, 'Application approved.');
+                showSuccess( context,
+          'Volunteer application approved successfully.',
+        );
         Navigator.pop(context);
       }
     } catch (e) {
@@ -619,13 +634,21 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => RejectApplicationDialog(
-        userId: widget.application['user_id'] as String,
-      ),
+      builder: (_) {
+  final profile = widget.application['profiles'] as Map?;
+
+  return RejectApplicationDialog(
+    userId: widget.application['user_id'] as String,
+    email: profile?['email'] as String? ?? '',
+    name: profile?['full_name'] as String? ?? 'Volunteer',
+  );
+},
     );
     if (saved == true && mounted) {
-      showSuccess(context, 'Application rejected.');
-      Navigator.pop(context);
+          showSuccess( context,
+      'Volunteer application rejected successfully.',
+    );
+          Navigator.pop(context);
     }
   }
 
@@ -741,11 +764,21 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
 
 class RejectApplicationDialog extends StatefulWidget {
   final String userId;
-  const RejectApplicationDialog({super.key, required this.userId});
+  final String email;
+  final String name;
+
+  const RejectApplicationDialog({
+    super.key,
+    required this.userId,
+    required this.email,
+    required this.name,
+  });
+
   @override
   State<RejectApplicationDialog> createState() =>
       _RejectApplicationDialogState();
 }
+
 
 class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
   final _form = GlobalKey<FormState>();
@@ -769,6 +802,17 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
         userId: widget.userId,
         reason: _reason.text,
       );
+
+      try {
+  await SupabaseService.sendVolunteerEmail(
+    email: widget.email,
+    name: widget.name,
+    status: 'rejected',
+    rejectionReason: _reason.text,
+  );
+} catch (e) {
+  debugPrint('Volunteer rejection email failed: $e');
+}
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));

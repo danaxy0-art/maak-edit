@@ -151,13 +151,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         document: _uploadedPath,
       );
       if (_volunteer) {
-        final application = await SupabaseService.getMyVolunteerApplication();
-        if (application == null) {
-          throw StateError(
-            'Your application could not be confirmed. Please retry submission.',
-          );
-        }
-      }
+  final application = await SupabaseService.getMyVolunteerApplication();
+
+  if (application == null) {
+    throw StateError(
+      'Your application could not be confirmed. Please retry submission.',
+    );
+  }
+
+  try {
+    await SupabaseService.sendVolunteerEmail(
+      email: _email.text,
+      name: _name.text,
+      status: 'pending',
+    );
+  } catch (e) {
+    debugPrint('Volunteer pending email failed: $e');
+  }
+}
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthGate()),
@@ -210,19 +221,27 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               children: [
                 const FieldLabel('Full name', requiredField: true),
                 AppTextField(
-                  controller: _name,
-                  maxLength: 80,
-                  validator: validateName,
-                  decoration: const InputDecoration(
-                    hintText: 'Your full name',
-                    counterText: '',
-                  ),
-                ),
+              controller: _name,
+              maxLength: 30,
+              validator: validateName,
+              liveValidation: true,
+             showValidCheck: true,
+             autofillHints: const [AutofillHints.name],
+             decoration: const InputDecoration(
+              hintText: 'Your full name',
+             counterText: '',
+             ),
+             ),
                 const FieldLabel('Email', requiredField: true),
                 AppTextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   validator: validateEmail,
+                  liveValidation: true,
+                  showValidCheck: true,
+                  autofillHints: const [AutofillHints.email],
+                  autocorrect: false,
+                  enableSuggestions: false,
                   decoration: const InputDecoration(
                     hintText: 'you@example.com',
                   ),

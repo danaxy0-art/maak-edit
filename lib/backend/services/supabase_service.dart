@@ -247,6 +247,28 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(rows as List);
   }
 
+  static Future<void> sendVolunteerEmail({
+  required String email,
+  required String name,
+  required String status,
+  String? rejectionReason,
+}) async {
+  final response = await client.functions.invoke(
+    'send-volunteer-email',
+    body: {
+      'email': email.trim(),
+      'name': name.trim(),
+      'status': status,
+      if (rejectionReason != null)
+        'rejectionReason': rejectionReason.trim(),
+    },
+  );
+
+  if (response.status < 200 || response.status >= 300) {
+    throw StateError('Unable to send volunteer email.');
+  }
+}
+
   static Future<void> approveVolunteerApplication(String id) async =>
       await client.rpc(
         'review_volunteer_application',

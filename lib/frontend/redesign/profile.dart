@@ -308,12 +308,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const FieldLabel('Full name', requiredField: true),
-                          AppTextField(
-                            controller: _name,
-                            maxLength: 80,
-                            validator: validateName,
-                            enabled: !_busy,
-                          ),
+                    AppTextField(
+                      controller: _name,
+                      maxLength: 30,
+                      validator: validateName,
+                      enabled: !_busy,
+                      liveValidation: true,
+                      showValidCheck: true,
+                      autofillHints: const [AutofillHints.name],
+                      decoration: const InputDecoration(
+                        hintText: 'Your full name',
+                        counterText: '',
+                      ),
+                    ),
                           FieldLabel(
                             volunteer
                                 ? 'Condition experience'
@@ -353,15 +360,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             requiredField: volunteer,
                           ),
                           AppTextField(
-                            controller: _about,
-                            maxLength: 300,
-                            maxLines: 4,
-                            enabled: !_busy,
-                            validator: (v) =>
-                                volunteer && (v == null || v.trim().isEmpty)
-                                ? 'Describe your experience'
-                                : null,
-                          ),
+                          controller: _about,
+                          maxLength: 300,
+                          maxLines: 4,
+                          enabled: !_busy,
+                          liveValidation: volunteer,
+                          showValidCheck: volunteer,
+                          validator: (v) =>
+                              volunteer && (v == null || v.trim().isEmpty)
+                                  ? 'Describe your experience'
+                                  : null,
+                        ),
                           if (widget.reapply) ...[
                             const FieldLabel(
                               'Verification document',
