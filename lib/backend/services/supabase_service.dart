@@ -227,10 +227,32 @@ class SupabaseService {
     bool active = true,
   }) async {
     final values = {'name': name.trim(), 'is_active': active};
+
     if (id == null) {
-      await client.from('chronic_conditions').insert(values);
+      final saved = await client
+          .from('chronic_conditions')
+          .insert(values)
+          .select('id')
+          .maybeSingle();
+
+      if (saved == null) {
+        throw ArgumentError(
+          'The condition could not be added. Check your Admin permissions.',
+        );
+      }
     } else {
-      await client.from('chronic_conditions').update(values).eq('id', id);
+      final saved = await client
+          .from('chronic_conditions')
+          .update(values)
+          .eq('id', id)
+          .select('id')
+          .maybeSingle();
+
+      if (saved == null) {
+        throw ArgumentError(
+          'The condition was not updated. Refresh the list and check your Admin permissions.',
+        );
+      }
     }
   }
 
