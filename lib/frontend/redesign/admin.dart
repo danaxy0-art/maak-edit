@@ -1,4 +1,4 @@
-import 'app_text_field.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../backend/services/supabase_service.dart';
@@ -6,9 +6,33 @@ import '../../backend/validation/form_policy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/maak_bottom_nav.dart';
 import 'ui.dart';
-import 'support.dart';
+import 'app_text_field.dart';
 import 'profile.dart';
 import 'feedback.dart';
+
+// Admin layouts use a wider content area on tablets while preserving
+// Ma'ak's existing theme, bottom navigation, and phone widths.
+class _AdminResponsiveBody extends StatelessWidget {
+  final Widget child;
+  const _AdminResponsiveBody({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final maxWidth = width >= 900
+        ? 960.0
+        : width >= 600
+        ? 720.0
+        : 520.0;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -68,21 +92,56 @@ class _AdminOverviewState extends State<AdminOverview> {
     _load();
   }
 
-  void _load() => _future = Future.wait([
-    SupabaseService.getVolunteerApplications(),
-    SupabaseService.getConditions(activeOnly: false),
-  ]);
+  // Failed requests stay on the error screen until the Admin retries.
+  void _load() {
+    _future = _loadOverview();
+  }
+
+  Future<List<List<Map<String, dynamic>>>> _loadOverview() async {
+    try {
+      final result = await Future.wait([
+        SupabaseService.getVolunteerApplications(),
+        SupabaseService.getConditions(activeOnly: false),
+      ]).timeout(const Duration(seconds: 15));
+      return result;
+    } catch (error) {
+      debugPrint('Admin overview load failed: ${error.runtimeType}');
+      rethrow;
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text("Are you sure you want to log out of Ma'ak?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await logout(context);
+  }
+
   @override
   Widget build(BuildContext context) => BotanicalScaffold(
     body: SafeArea(
-      child: ResponsiveBody(
+      child: _AdminResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             LogoHeader(
               trailing: IconButton(
                 tooltip: 'Log out',
-                onPressed: () => logout(context),
+                onPressed: _confirmLogout,
                 icon: const Icon(Icons.logout),
               ),
             ),
@@ -104,6 +163,9 @@ class _AdminOverviewState extends State<AdminOverview> {
             FutureBuilder<List<List<Map<String, dynamic>>>>(
               future: _future,
               builder: (context, s) {
+                if (s.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 if (s.hasError) {
                   return EmptyState(
                     'Could not load overview',
@@ -186,10 +248,7 @@ class _AdminOverviewState extends State<AdminOverview> {
                                   ),
                                 ),
                               ),
-                              RoleChip(
-                                _statusLabel(row['status'] as String),
-                                error: row['status'] == 'rejected',
-                              ),
+                              _AdminStatusChip(row['status'] as String?),
                             ],
                           ),
                         ),
@@ -262,56 +321,185 @@ class _AdminOverviewState extends State<AdminOverview> {
   );
 }
 
-class ApplicationsPage extends StatelessWidget {
+class ApplicationsPage extends StatefulWidget {
   const ApplicationsPage({super.key});
+
   @override
-  Widget build(BuildContext context) => DataListPage(
-    title: 'Volunteer applications',
-    load: SupabaseService.getVolunteerApplications,
-    emptyTitle: 'No applications yet',
-    emptyText: 'Submitted applications will appear here.',
-    item: (context, row, refresh) => SurfaceCard(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ApplicationDetailPage(application: row),
-          ),
-        );
-        refresh();
-      },
-      child: Row(
+  State<ApplicationsPage> createState() => _ApplicationsPageState();
+}
+
+class _ApplicationsPageState extends State<ApplicationsPage> {
+  late Future<List<Map<String, dynamic>>> _future;
+  String _search = '';
+  final _searchController = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetch();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // No automatic background retry: leave the error and Try again visible.
+  void _reload() {
+    if (mounted) {
+      setState(() {
+        _future = _fetch();
+      });
+    } else {
+      _future = _fetch();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetch() async {
+    try {
+      final rows = await SupabaseService.getVolunteerApplications().timeout(
+        const Duration(seconds: 15),
+      );
+      return rows;
+    } catch (error) {
+      debugPrint('Admin applications load failed: ${error.runtimeType}');
+      rethrow;
+    }
+  }
+
+  Future<void> _pullToRefresh() async {
+    _reload();
+    try {
+      await _future;
+    } catch (_) {
+      // FutureBuilder renders the team's standard retryable EmptyState.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => BotanicalScaffold(
+    appBar: AppBar(title: const Text('Volunteer applications')),
+    body: _AdminResponsiveBody(
+      child: Column(
         children: [
-          CircleAvatar(
-            backgroundColor: AppColors.selectedCardFill,
-            child: Text(initials(_appName(row))),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _appName(row),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  row['condition_experience'] as String? ?? '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                RoleChip(
-                  _statusLabel(row['status'] as String),
-                  error: row['status'] == 'rejected',
-                ),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) =>
+                  setState(() => _search = value.trim().toLowerCase()),
+              decoration: const InputDecoration(
+                hintText: 'Search applications...',
+                prefixIcon: Icon(Icons.search),
+              ),
             ),
           ),
-          const Icon(Icons.chevron_right),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return EmptyState(
+                    'Could not load applications',
+                    friendlyError(snapshot.error!),
+                    retry: _reload,
+                  );
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final rows = snapshot.data!.where((row) {
+                  if (_search.isEmpty) return true;
+                  final name = _appName(row).toLowerCase();
+                  final condition =
+                      (row['condition_experience'] as String? ?? '')
+                          .toLowerCase();
+                  final status = _statusLabel(
+                    row['status'] as String?,
+                  ).toLowerCase();
+                  return name.contains(_search) ||
+                      condition.contains(_search) ||
+                      status.contains(_search);
+                }).toList();
+                return RefreshIndicator(
+                  onRefresh: _pullToRefresh,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      if (snapshot.data!.isEmpty)
+                        const EmptyState(
+                          'No applications yet',
+                          'Submitted applications will appear here.',
+                        ),
+                      if (rows.isEmpty && snapshot.data!.isNotEmpty)
+                        const EmptyState(
+                          'No matching applications',
+                          'Try a different search.',
+                        ),
+                      for (final row in rows)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: SurfaceCard(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ApplicationDetailPage(application: row),
+                                ),
+                              );
+                              if (mounted) _reload();
+                            },
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: AppColors.selectedCardFill,
+                                  child: Text(initials(_appName(row))),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _appName(row),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        row['condition_experience']
+                                                as String? ??
+                                            '',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _AdminStatusChip(
+                                        row['status'] as String?,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     ),
@@ -327,24 +515,64 @@ class ConditionsAdminPage extends StatefulWidget {
 class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
   late Future<List<Map<String, dynamic>>> _future;
   String _search = '';
+  final _searchController = TextEditingController();
   final Set<String> _saving = {};
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  void _load() => _future = SupabaseService.getConditions(activeOnly: false);
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _load() {
+    _future = _fetchConditions();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchConditions() async {
+    try {
+      final rows = await SupabaseService.getConditions(
+        activeOnly: false,
+      ).timeout(const Duration(seconds: 15));
+      return rows;
+    } catch (error) {
+      debugPrint('Admin conditions load failed: ${error.runtimeType}');
+      rethrow;
+    }
+  }
+
   Future<void> _edit([Map<String, dynamic>? row]) async {
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => _ConditionDialog(condition: row),
     );
-    if (saved == true && mounted) setState(_load);
+    if (saved == true && mounted) {
+      // An old search term can otherwise hide the newly edited/added row.
+      _searchController.clear();
+      setState(() {
+        _search = '';
+        _load();
+      });
+      showSuccess(context, 'Condition saved.');
+    }
   }
 
   Future<void> _toggle(Map<String, dynamic> row, bool active) async {
-    final id = row['id'] as String;
+    final id = row['id'] as String?;
+    if (id == null || id.trim().isEmpty) {
+      showAppError(
+        context,
+        ArgumentError(
+          'This condition has no ID. Refresh the list and try again.',
+        ),
+      );
+      return;
+    }
     setState(() => _saving.add(id));
     try {
       await SupabaseService.saveCondition(
@@ -352,7 +580,15 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
         name: row['name'] as String,
         active: active,
       );
-      if (mounted) setState(_load);
+      // The write succeeded. Refresh separately, so a network failure while
+      // reloading cannot be mistaken for a failed database update.
+      if (mounted) {
+        setState(_load);
+        showSuccess(
+          context,
+          active ? 'Condition activated.' : 'Condition deactivated.',
+        );
+      }
     } catch (e) {
       if (mounted) showAppError(context, e);
     } finally {
@@ -363,7 +599,7 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
   @override
   Widget build(BuildContext context) => BotanicalScaffold(
     appBar: AppBar(title: const Text('Chronic conditions')),
-    body: ResponsiveBody(
+    body: _AdminResponsiveBody(
       child: Column(
         children: [
           Padding(
@@ -376,7 +612,9 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
                 ),
                 const SizedBox(height: 18),
                 TextField(
-                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
+                  controller: _searchController,
+                  onChanged: (v) =>
+                      setState(() => _search = v.trim().toLowerCase()),
                   decoration: const InputDecoration(
                     hintText: 'Search conditions...',
                     prefixIcon: Icon(Icons.search),
@@ -395,6 +633,9 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _future,
               builder: (context, s) {
+                if (s.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 if (s.hasError) {
                   return EmptyState(
                     'Could not load conditions',
@@ -411,87 +652,102 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
                           (r['name'] as String).toLowerCase().contains(_search),
                     )
                     .toList();
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  children: [
-                    for (final row in rows)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SurfaceCard(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.favorite_border,
-                                color: row['is_active'] == true
-                                    ? AppColors.selectedCardBorder
-                                    : AppColors.textMuted,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      row['name'] as String,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      row['is_active'] == true
-                                          ? 'Active'
-                                          : 'Inactive',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textMuted,
-                                      ),
-                                    ),
-                                  ],
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(_load);
+                    try {
+                      await _future;
+                    } catch (_) {
+                      // The error is displayed by FutureBuilder.
+                    }
+                  },
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    children: [
+                      for (final row in rows)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SurfaceCard(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.favorite_border,
+                                  color: row['is_active'] == true
+                                      ? AppColors.selectedCardBorder
+                                      : AppColors.textMuted,
                                 ),
-                              ),
-                              Switch(
-                                value: row['is_active'] as bool,
-                                onChanged: _saving.contains(row['id'])
-                                    ? null
-                                    : (v) => _toggle(row, v),
-                              ),
-                              IconButton(
-                                tooltip: 'Edit condition',
-                                onPressed: _saving.contains(row['id'])
-                                    ? null
-                                    : () => _edit(row),
-                                icon: const Icon(Icons.edit_outlined, size: 20),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (rows.isEmpty)
-                      const EmptyState(
-                        'No matching conditions',
-                        'Try a different search.',
-                      ),
-                    const SizedBox(height: 14),
-                    const SurfaceCard(
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 19),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Active conditions appear in registration. Disabling keeps existing profiles intact.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textMuted,
-                              ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        row['name'] as String,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        row['is_active'] == true
+                                            ? 'Active'
+                                            : 'Inactive',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch(
+                                  value: row['is_active'] as bool,
+                                  onChanged: _saving.contains(row['id'])
+                                      ? null
+                                      : (v) => _toggle(row, v),
+                                ),
+                                IconButton(
+                                  tooltip: 'Edit condition',
+                                  onPressed: _saving.contains(row['id'])
+                                      ? null
+                                      : () => _edit(row),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
+                      if (rows.isEmpty)
+                        const EmptyState(
+                          'No matching conditions',
+                          'Try a different search.',
+                        ),
+                      const SizedBox(height: 14),
+                      const SurfaceCard(
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 19),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Active conditions appear in registration. Disabling keeps existing profiles intact.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               },
             ),
@@ -529,7 +785,15 @@ class _ConditionDialogState extends State<_ConditionDialog> {
   }
 
   Future<void> _save() async {
-    if (!_form.currentState!.validate()) return;
+    if (_busy || !_form.currentState!.validate()) return;
+    if (widget.condition != null &&
+        (widget.condition!['id'] as String? ?? '').trim().isEmpty) {
+      setState(
+        () => _error =
+            'This condition has no ID. Close this dialog and refresh the list.',
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -537,9 +801,11 @@ class _ConditionDialogState extends State<_ConditionDialog> {
     try {
       await SupabaseService.saveCondition(
         id: widget.condition?['id'] as String?,
-        name: _name.text,
+        name: _name.text.trim(),
         active: widget.condition?['is_active'] as bool? ?? true,
       );
+      // A successful save is not undone if refreshing the list fails.
+      // The parent page reloads the list and handles any refresh error.
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
@@ -563,12 +829,14 @@ class _ConditionDialogState extends State<_ConditionDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const FieldLabel('Condition name', requiredField: true),
-            AppTextField(
+            _AdminTextField(
               controller: _name,
               enabled: !_busy,
               maxLength: 80,
               validator: (v) => v == null || v.trim().isEmpty
                   ? 'Enter a condition name'
+                  : v.trim().length > 80
+                  ? 'Use at most 80 characters'
                   : null,
             ),
             if (_error != null) FieldErrorNotice(_error!),
@@ -598,48 +866,155 @@ class ApplicationDetailPage extends StatefulWidget {
 
 class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
   bool _busy = false;
+  bool _openingDocument = false;
+  bool _rejecting = false;
+  bool _stale = false;
+  String? _decision;
+  String? _notice;
+  String? get _status => _decision ?? widget.application['status'] as String?;
+
+  bool _canReview() {
+    if (_busy || _rejecting || _stale || _status != 'pending_review') {
+      return false;
+    }
+    if ((widget.application['user_id'] as String? ?? '').trim().isEmpty) {
+      showAppError(
+        context,
+        ArgumentError(
+          'This application has no volunteer ID. Return to the list and refresh it.',
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  void _reviewError(Object error) {
+    if (error is PostgrestException &&
+        error.message.contains('application_changed')) {
+      setState(() {
+        _stale = true;
+        _notice =
+            'This application has changed. Return to the list to load its current status.';
+      });
+    }
+    showAppError(context, error);
+  }
+
   Future<void> _approve() async {
+    if (!_canReview()) return;
     setState(() => _busy = true);
     try {
       await SupabaseService.approveVolunteerApplication(
         widget.application['user_id'] as String,
       );
+      bool emailAttempted = false;
+      bool emailAccepted = false;
+      final profile = widget.application['profiles'] as Map?;
+      final email = profile?['email'] as String? ?? '';
+      if (validateEmail(email) == null) {
+        emailAttempted = true;
+        try {
+          await _sendVolunteerEmail(
+            email: email,
+            name: _appName(widget.application),
+            status: 'approved',
+          );
+          emailAccepted = true;
+        } catch (_) {
+          // The review and in-app notification have already committed.
+        }
+      }
       if (mounted) {
-        showSuccess(context, 'Application approved.');
-        Navigator.pop(context);
+        _completeReview(
+          'approved',
+          emailAccepted: emailAccepted,
+          emailFailed: emailAttempted && !emailAccepted,
+        );
       }
     } catch (e) {
-      if (mounted) showAppError(context, e);
+      if (mounted) _reviewError(e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _reject() async {
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => RejectApplicationDialog(
-        userId: widget.application['user_id'] as String,
-      ),
+  void _completeReview(
+    String status, {
+    required bool emailAccepted,
+    required bool emailFailed,
+  }) {
+    setState(() {
+      _decision = status;
+      // A failed optional email must not be presented as a failed review.
+      _notice = emailFailed
+          ? 'Application review succeeded and the in-app notification was created. Email delivery could not be confirmed. You can contact the volunteer separately.'
+          : null;
+    });
+    showSuccess(
+      context,
+      status == 'approved'
+          ? 'Application approved successfully.'
+          : 'Application rejected successfully.',
     );
-    if (saved == true && mounted) {
-      showSuccess(context, 'Application rejected.');
-      Navigator.pop(context);
+  }
+
+  Future<void> _reject() async {
+    if (!_canReview()) return;
+    setState(() => _rejecting = true);
+    try {
+      final profile = widget.application['profiles'] as Map?;
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => RejectApplicationDialog(
+          userId: widget.application['user_id'] as String,
+          email: profile?['email'] as String? ?? '',
+          name: _appName(widget.application),
+        ),
+      );
+      if (!mounted || result == null) return;
+      if (result == 'stale') {
+        setState(() {
+          _stale = true;
+          _notice =
+              'This application has changed. Return to the list to load its current status.';
+        });
+      } else {
+        _completeReview(
+          'rejected',
+          emailAccepted: result == 'sent',
+          emailFailed: result == 'email_failed',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _rejecting = false);
     }
   }
 
   Future<void> _document(String value) async {
+    if (_openingDocument) return;
+    setState(() => _openingDocument = true);
     try {
-      final url = await SupabaseService.verificationLink(value);
-      if (!await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      )) {
-        throw StateError('Could not open document');
+      if (value.trim().isEmpty) {
+        throw ArgumentError(
+          'No verification document is available. Return to the list and refresh it.',
+        );
+      }
+      final url = await SupabaseService.verificationLink(value.trim());
+      final uri = Uri.tryParse(url);
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.host.isEmpty ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw ArgumentError(
+          'Could not open the document. Check that a browser is available and try again.',
+        );
       }
     } catch (e) {
-      if (mounted) showAppError(context, e);
+      if (mounted) showAppError(context, e, retry: () => _document(value));
+    } finally {
+      if (mounted) setState(() => _openingDocument = false);
     }
   }
 
@@ -648,7 +1023,7 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
     final a = widget.application;
     return BotanicalScaffold(
       appBar: AppBar(title: const Text('Application details')),
-      body: ResponsiveBody(
+      body: _AdminResponsiveBody(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
@@ -675,10 +1050,7 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
             const SizedBox(height: 18),
             Align(
               alignment: Alignment.centerLeft,
-              child: RoleChip(
-                _statusLabel(a['status'] as String),
-                error: a['status'] == 'rejected',
-              ),
+              child: _AdminStatusChip(_status),
             ),
             const SectionTitle('Personal information'),
             SurfaceCard(
@@ -695,26 +1067,62 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
               ),
             ),
             const SectionTitle('Verification document'),
-            if ((a['verification_document_url'] as String? ?? '').isNotEmpty)
+            if ((a['verification_document_url'] as String? ?? '')
+                .trim()
+                .isNotEmpty)
               OutlinedButton.icon(
-                onPressed: () =>
-                    _document(a['verification_document_url'] as String),
+                onPressed: _openingDocument
+                    ? null
+                    : () => _document(a['verification_document_url'] as String),
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Open document'),
+                label: Text(
+                  _openingDocument ? 'Opening document...' : 'Open document',
+                ),
               )
             else
-              const Text('No document uploaded'),
+              const FieldErrorNotice(
+                'No verification document is available. Ask the volunteer for a document before approving.',
+              ),
             if (a['status'] == 'rejected') ...[
               const SectionTitle('Reason for rejection'),
               SurfaceCard(child: Text(a['rejection_reason'] as String? ?? '')),
             ],
             const SizedBox(height: 32),
-            if (a['status'] == 'pending_review')
+            if (_notice != null)
+              _stale
+                  ? FieldErrorNotice(_notice!)
+                  : SurfaceCard(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            color: AppColors.primaryNavy,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _notice!,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            if (_stale)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Return to applications'),
+              ),
+            if (_status == 'pending_review' && !_stale)
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _busy ? null : _reject,
+                      onPressed: _busy || _rejecting ? null : _reject,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
                         side: const BorderSide(color: AppColors.error),
@@ -727,7 +1135,15 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
                     child: PrimaryButton(
                       'Approve',
                       busy: _busy,
-                      onPressed: _approve,
+                      onPressed:
+                          (_rejecting
+                                  ? ''
+                                  : a['verification_document_url'] as String? ??
+                                        '')
+                              .trim()
+                              .isEmpty
+                          ? null
+                          : _approve,
                     ),
                   ),
                 ],
@@ -741,7 +1157,16 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
 
 class RejectApplicationDialog extends StatefulWidget {
   final String userId;
-  const RejectApplicationDialog({super.key, required this.userId});
+  final String email;
+  final String name;
+
+  const RejectApplicationDialog({
+    super.key,
+    required this.userId,
+    required this.email,
+    required this.name,
+  });
+
   @override
   State<RejectApplicationDialog> createState() =>
       _RejectApplicationDialogState();
@@ -759,7 +1184,14 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
   }
 
   Future<void> _save() async {
-    if (!_form.currentState!.validate() || _busy) return;
+    if (_busy || !_form.currentState!.validate()) return;
+    if (widget.userId.trim().isEmpty) {
+      setState(
+        () => _error =
+            'This application has no volunteer ID. Close this dialog and refresh the list.',
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -769,9 +1201,42 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
         userId: widget.userId,
         reason: _reason.text,
       );
-      if (mounted) Navigator.pop(context, true);
+
+      bool emailAttempted = false;
+      bool emailAccepted = false;
+      if (validateEmail(widget.email) == null) {
+        emailAttempted = true;
+        try {
+          await _sendVolunteerEmail(
+            email: widget.email,
+            name: widget.name,
+            status: 'rejected',
+            rejectionReason: _reason.text.trim(),
+          );
+          emailAccepted = true;
+        } catch (_) {
+          // Preserve the committed review even if the optional email fails.
+        }
+      }
+      if (mounted) {
+        Navigator.pop(
+          context,
+          emailAccepted
+              ? 'sent'
+              : emailAttempted
+              ? 'email_failed'
+              : 'no_email',
+        );
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      if (mounted) {
+        if (e is PostgrestException &&
+            e.message.contains('application_changed')) {
+          Navigator.pop(context, 'stale');
+        } else {
+          setState(() => _error = friendlyError(e));
+        }
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -795,7 +1260,7 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
                 style: TextStyle(color: AppColors.textMuted, height: 1.4),
               ),
               const FieldLabel('Reason', requiredField: true),
-              AppTextField(
+              _AdminTextField(
                 controller: _reason,
                 maxLines: 4,
                 maxLength: 500,
@@ -812,7 +1277,7 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
       ),
       actions: [
         OutlinedButton(
-          onPressed: _busy ? null : () => Navigator.pop(context, false),
+          onPressed: _busy ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -827,8 +1292,131 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
 
 String _appName(Map<String, dynamic> row) =>
     (row['profiles'] as Map?)?['full_name'] as String? ?? 'Volunteer';
-String _statusLabel(String status) => status == 'pending_review'
+
+// Reuse the team's RoleChip for Pending/Rejected; highlight Approved in
+// the team's existing green success color without changing shared widgets.
+class _AdminStatusChip extends StatelessWidget {
+  final String? status;
+  const _AdminStatusChip(this.status);
+
+  @override
+  Widget build(BuildContext context) {
+    if (status != 'approved') {
+      return RoleChip(_statusLabel(status), error: status == 'rejected');
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: const Text(
+        'Approved',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.success,
+        ),
+      ),
+    );
+  }
+}
+
+String _statusLabel(String? status) => status == 'pending_review'
     ? 'Pending'
     : status == 'approved'
     ? 'Approved'
-    : 'Rejected';
+    : status == 'rejected'
+    ? 'Rejected'
+    : 'Unknown status';
+
+/// Admin-only form field: matches Ma'ak's inline red FieldErrorNotice and
+/// red input border. It also displays errors on Save, even if never touched.
+/// (The shared AppTextField currently hides untouched submit errors.)
+class _AdminTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool enabled;
+  final int maxLength;
+  final int maxLines;
+  final FormFieldValidator<String> validator;
+  final InputDecoration decoration;
+  const _AdminTextField({
+    required this.controller,
+    required this.enabled,
+    required this.maxLength,
+    required this.validator,
+    this.maxLines = 1,
+    this.decoration = const InputDecoration(),
+  });
+
+  @override
+  Widget build(BuildContext context) => FormField<String>(
+    initialValue: controller.text,
+    validator: (_) => validator(controller.text),
+    autovalidateMode: AutovalidateMode.disabled,
+    builder: (field) {
+      final errorBorder = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (field.hasError)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FieldErrorNotice(field.errorText!),
+            ),
+          TextField(
+            controller: controller,
+            enabled: enabled,
+            maxLength: maxLength,
+            maxLines: maxLines,
+            onChanged: (value) {
+              final hadError = field.hasError;
+              field.didChange(value);
+              if (hadError) field.validate();
+            },
+            onTapOutside: (_) {
+              FocusManager.instance.primaryFocus?.unfocus();
+              field.didChange(controller.text);
+              field.validate();
+            },
+            decoration: decoration.copyWith(
+              enabledBorder: field.hasError
+                  ? errorBorder
+                  : decoration.enabledBorder,
+              focusedBorder: field.hasError
+                  ? errorBorder
+                  : decoration.focusedBorder,
+              suffixIcon: field.hasError
+                  ? const Icon(Icons.error_outline, color: AppColors.error)
+                  : decoration.suffixIcon,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+// Keep Admin email handling local; some team service versions lack this helper.
+Future<void> _sendVolunteerEmail({
+  required String email,
+  required String name,
+  required String status,
+  String? rejectionReason,
+}) async {
+  final response = await SupabaseService.client.functions.invoke(
+    'send-volunteer-email',
+    body: {
+      'email': email.trim(),
+      'name': name.trim(),
+      'status': status,
+      if (rejectionReason != null) 'rejectionReason': rejectionReason.trim(),
+    },
+  );
+  if (response.status < 200 || response.status >= 300) {
+    throw StateError('Unable to send volunteer email.');
+  }
+}
