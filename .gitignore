@@ -36,3 +36,7 @@ node_modules/
 __MACOSX/
 .DS_Store
 android/local.properties
+
+# Supabase CLI local cache (project ref, versions) and Kotlin daemon logs
+supabase/.temp/
+android/.kotlin/

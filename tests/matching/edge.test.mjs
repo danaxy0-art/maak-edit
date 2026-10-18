@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import {cosine,rankMatches} from '../../supabase/functions/match-volunteers/matching.mjs';
-const source=readFileSync(new URL('../../supabase/functions/match-volunteers/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+const source=readFileSync(new URL('../../supabase/functions/match-volunteers/index.ts',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const js=stripTypeScriptTypes(source);
 const condition={id:'c1',name:'Asthma'};
 const context={seeker:{description:'Daily routines',language:'English',conditions:[condition]},candidates:[{user_id:'v1',full_name:'Private name',language:'English',description:'Daily routines support',conditions:[condition],status:'approved',ai_consent:true}]};

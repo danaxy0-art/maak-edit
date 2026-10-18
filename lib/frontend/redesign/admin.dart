@@ -905,31 +905,24 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
     if (!_canReview()) return;
     setState(() => _busy = true);
     try {
-      await SupabaseService.approveVolunteerApplication(
-        widget.application['user_id'] as String,
-      );
-      bool emailAttempted = false;
+      final volunteerId = widget.application['user_id'] as String;
+      await SupabaseService.approveVolunteerApplication(volunteerId);
       bool emailAccepted = false;
-      final profile = widget.application['profiles'] as Map?;
-      final email = profile?['email'] as String? ?? '';
-      if (validateEmail(email) == null) {
-        emailAttempted = true;
-        try {
-          await _sendVolunteerEmail(
-            email: email,
-            name: _appName(widget.application),
-            status: 'approved',
-          );
-          emailAccepted = true;
-        } catch (_) {
-          // The review and in-app notification have already committed.
-        }
+      try {
+        // The server resolves the volunteer's address from the stored review.
+        await SupabaseService.sendVolunteerEmail(
+          status: 'approved',
+          volunteerId: volunteerId,
+        );
+        emailAccepted = true;
+      } catch (_) {
+        // The review and in-app notification have already committed.
       }
       if (mounted) {
         _completeReview(
           'approved',
           emailAccepted: emailAccepted,
-          emailFailed: emailAttempted && !emailAccepted,
+          emailFailed: !emailAccepted,
         );
       }
     } catch (e) {
@@ -963,14 +956,11 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
     if (!_canReview()) return;
     setState(() => _rejecting = true);
     try {
-      final profile = widget.application['profiles'] as Map?;
       final result = await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (_) => RejectApplicationDialog(
           userId: widget.application['user_id'] as String,
-          email: profile?['email'] as String? ?? '',
-          name: _appName(widget.application),
         ),
       );
       if (!mounted || result == null) return;
@@ -1157,15 +1147,8 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
 
 class RejectApplicationDialog extends StatefulWidget {
   final String userId;
-  final String email;
-  final String name;
 
-  const RejectApplicationDialog({
-    super.key,
-    required this.userId,
-    required this.email,
-    required this.name,
-  });
+  const RejectApplicationDialog({super.key, required this.userId});
 
   @override
   State<RejectApplicationDialog> createState() =>
@@ -1202,31 +1185,19 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
         reason: _reason.text,
       );
 
-      bool emailAttempted = false;
       bool emailAccepted = false;
-      if (validateEmail(widget.email) == null) {
-        emailAttempted = true;
-        try {
-          await _sendVolunteerEmail(
-            email: widget.email,
-            name: widget.name,
-            status: 'rejected',
-            rejectionReason: _reason.text.trim(),
-          );
-          emailAccepted = true;
-        } catch (_) {
-          // Preserve the committed review even if the optional email fails.
-        }
+      try {
+        // The server reads the stored reason; no reason text is sent here.
+        await SupabaseService.sendVolunteerEmail(
+          status: 'rejected',
+          volunteerId: widget.userId,
+        );
+        emailAccepted = true;
+      } catch (_) {
+        // Preserve the committed review even if the optional email fails.
       }
       if (mounted) {
-        Navigator.pop(
-          context,
-          emailAccepted
-              ? 'sent'
-              : emailAttempted
-              ? 'email_failed'
-              : 'no_email',
-        );
+        Navigator.pop(context, emailAccepted ? 'sent' : 'email_failed');
       }
     } catch (e) {
       if (mounted) {
@@ -1398,25 +1369,4 @@ class _AdminTextField extends StatelessWidget {
       );
     },
   );
-}
-
-// Keep Admin email handling local; some team service versions lack this helper.
-Future<void> _sendVolunteerEmail({
-  required String email,
-  required String name,
-  required String status,
-  String? rejectionReason,
-}) async {
-  final response = await SupabaseService.client.functions.invoke(
-    'send-volunteer-email',
-    body: {
-      'email': email.trim(),
-      'name': name.trim(),
-      'status': status,
-      if (rejectionReason != null) 'rejectionReason': rejectionReason.trim(),
-    },
-  );
-  if (response.status < 200 || response.status >= 300) {
-    throw StateError('Unable to send volunteer email.');
-  }
 }

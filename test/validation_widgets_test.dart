@@ -132,8 +132,6 @@ void main() {
         home: const Scaffold(
           body: RejectApplicationDialog(
             userId: '00000000-0000-0000-0000-000000000001',
-            email: 'volunteer@example.com',
-            name: 'Test Volunteer',
           ),
         ),
       ),
