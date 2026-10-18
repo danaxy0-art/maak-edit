@@ -1,0 +1,3 @@
+[functions.match-volunteers]
+# JWT is verified in index.ts using auth.getUser; supports current signing keys.
+verify_jwt = false

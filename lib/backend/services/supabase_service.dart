@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../validation/password_policy.dart';
 import '../validation/form_policy.dart';
 
@@ -25,8 +26,8 @@ class SupabaseService {
     required String email,
     required String password,
   }) => client.auth.signInWithPassword(email: email.trim(), password: password);
-  //كود جديد  
-    /// Sign-up pre-check (Fix 1). Returns true/false, or null when the check
+  //كود جديد
+  /// Sign-up pre-check (Fix 1). Returns true/false, or null when the check
   /// could not complete (network error / timeout).
   static Future<bool?> isEmailRegistered(String email) async {
     try {
@@ -42,6 +43,7 @@ class SupabaseService {
       return null;
     }
   }
+
   static Future<AuthResponse> signUp({
     required String fullName,
     required String email,
@@ -157,7 +159,10 @@ class SupabaseService {
         .select()
         .eq('user_id', userId)
         .maybeSingle();
+    final conditions = await client.rpc('my_maak_conditions') as List;
     return {
+      'conditions': conditions.map((c) => c['name'] as String).toList(),
+      'ai_matching_consent': row?['ai_matching_consent'] == true,
       'full_name': profile?['full_name'] ?? '',
       'username': profile?['username'] ?? '',
       'email': currentUser?.email ?? '',
@@ -184,6 +189,8 @@ class SupabaseService {
     String? username,
     required String role,
     required String condition,
+    List<String>? conditions,
+    bool aiConsent = false,
     required String language,
     String? description,
     String? document,
@@ -202,12 +209,13 @@ class SupabaseService {
     final error = validateUsername(savedUsername);
     if (error != null) throw ArgumentError(error);
     await client.rpc(
-      'save_maak_profile',
+      'save_maak_profile_multi',
       params: {
         'p_full_name': fullName.trim(),
         'p_username': savedUsername.trim().toLowerCase(),
         'p_role': role,
-        'p_condition': condition,
+        'p_conditions': conditions ?? [condition],
+        'p_ai_consent': aiConsent,
         'p_language': language,
         'p_description': description?.trim() ?? '',
         'p_document': document,
@@ -215,6 +223,23 @@ class SupabaseService {
       },
     );
     profileRevision.value++;
+  }
+
+  static Future<Map<String, dynamic>> getMatches({bool useAi = false}) async {
+    try {
+      final response = await client.functions.invoke(
+        'match-volunteers',
+        body: {'use_ai': useAi},
+      );
+      if (response.status != 200 || response.data is! Map) {
+        throw StateError('Matching unavailable');
+      }
+      return Map<String, dynamic>.from(response.data as Map);
+    } catch (_) {
+      throw ArgumentError(
+        'Could not load matches. Check your connection or ask the administrator to finish matching setup.',
+      );
+    }
   }
 
   static Future<bool> hasCompletedProfile(String role) async {
@@ -265,26 +290,25 @@ class SupabaseService {
   }
 
   static Future<void> sendVolunteerEmail({
-  required String email,
-  required String name,
-  required String status,
-  String? rejectionReason,
-}) async {
-  final response = await client.functions.invoke(
-    'send-volunteer-email',
-    body: {
-      'email': email.trim(),
-      'name': name.trim(),
-      'status': status,
-      if (rejectionReason != null)
-        'rejectionReason': rejectionReason.trim(),
-    },
-  );
+    required String email,
+    required String name,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    final response = await client.functions.invoke(
+      'send-volunteer-email',
+      body: {
+        'email': email.trim(),
+        'name': name.trim(),
+        'status': status,
+        if (rejectionReason != null) 'rejectionReason': rejectionReason.trim(),
+      },
+    );
 
-  if (response.status < 200 || response.status >= 300) {
-    throw StateError('Unable to send volunteer email.');
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError('Unable to send volunteer email.');
+    }
   }
-}
 
   static Future<void> approveVolunteerApplication(String id) async =>
       await client.rpc(

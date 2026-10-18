@@ -1,12 +1,14 @@
 import 'app_text_field.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../auth/auth_gate.dart';
 import '../theme/app_theme.dart';
 import '../widgets/maak_logo.dart';
-import 'condition_field.dart';
+import 'multi_condition_field.dart';
 import 'feedback.dart';
 import 'password_fields.dart';
 import 'ui.dart';
@@ -32,7 +34,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _password = TextEditingController(),
       _confirmation = TextEditingController(),
       _about = TextEditingController();
-  String? _condition, _language;
+  List<String> _conditions = [];
+  String? _language;
+  bool _aiConsent = false;
   PlatformFile? _file;
   int _step = 0;
   bool _busy = false, _created = false;
@@ -97,7 +101,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   Future<void> _create() async {
     if (_busy || !_preferencesForm.currentState!.validate()) return;
-    if (_condition == null || _language == null) return;
+    if (_conditions.isEmpty || _language == null) return;
     if (_volunteer && _file == null) {
       setState(() {});
       return;
@@ -145,7 +149,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       await SupabaseService.saveProfile(
         fullName: _name.text,
         role: widget.role,
-        condition: _condition!,
+        condition: _conditions.first,
+        conditions: _conditions,
+        aiConsent: _aiConsent,
         language: _language!,
         description: _about.text,
         document: _uploadedPath,
@@ -262,11 +268,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       : 'Chronic condition',
                   requiredField: true,
                 ),
-                ConditionField(
-                  value: _condition,
+                MultiConditionField(
+                  values: _conditions,
                   enabled: !_busy,
-                  onChanged: (v) => setState(() => _condition = v),
+                  onChanged: (v) => setState(() => _conditions = v),
                 ),
+                if (_volunteer)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _aiConsent,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _aiConsent = v ?? false),
+                    title: const Text('Allow AI experience comparison'),
+                    subtitle: const Text(
+                      'Your experience description may be sent to Google Gemini when a help seeker requests AI matching. Do not include names, contact details or documents.',
+                    ),
+                  ),
                 const FieldLabel('Preferred language', requiredField: true),
                 AppSelectField<String>(
                   decoration: const InputDecoration(

@@ -1,4 +1,8 @@
+import 'profile.dart';
+import 'matching_page.dart';
+
 import 'package:flutter/material.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../widgets/current_user_name.dart';
 import '../theme/app_theme.dart';
@@ -79,8 +83,12 @@ class _HomePageState extends State<HomePage> {
                 subtitle: volunteer
                     ? 'Be there for someone who understands.'
                     : 'Connect with a volunteer who has a similar experience.',
-                button: volunteer ? null : 'Find a volunteer',
-                onTap: () => _push(const VolunteerDirectoryPage()),
+                button: volunteer ? 'Matching preferences' : 'Find my matches',
+                onTap: () => _push(
+                  volunteer
+                      ? const EditProfilePage(role: 'volunteer')
+                      : const MatchingPage(),
+                ),
               ),
               if (!volunteer) ...[
                 const SectionTitle('Quick actions'),
@@ -105,9 +113,9 @@ class _HomePageState extends State<HomePage> {
                   final requests = s.data![0], sessions = s.data![1];
                   final upcoming = sessions
                       .where(
-                        (r) => DateTime.parse(
-                          r['starts_at'] as String,
-                        ).isAfter(DateTime.now()),
+                        (r) =>
+                            DateTime.parse(r['starts_at'] as String)
+                                .isAfter(DateTime.now()),
                       )
                       .toList();
                   final pending = requests

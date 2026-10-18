@@ -1,3 +1,5 @@
+> جزئية Sprint 2 الجديدة: ابدئي بملف AI_MATCHING_SETUP_AR.md. إضافة قاعدة البيانات ونشر Edge Function مطلوبان، والمفتاح وحده لا يكفي.
+
 > تحديث إصلاح التسجيل والصفحات: ابدئي بملف FIX_SETUP_AR.md وشغّلي supabase_schema.sql كاملًا في مشروع Supabase المستخدم.
 
 # Ma’ak — النسخة المطوّرة

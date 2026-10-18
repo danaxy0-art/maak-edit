@@ -1,7 +1,5 @@
-# Validation — registration and database fixes
+# Current delivery validation
 
-- Flutter: 43 tests passed, including no username input for either role and blocking registration when conditions fail to load.
-- PostgreSQL/PGlite: 18 integration checks passed, including a volunteer registered without username metadata being visible to admin, document validation, review permissions, rejection and reapplication.
-- Updated SQL is tested twice to verify repeatability. Auth accounts missing profiles are repaired; existing profile roles and data are preserved. Admin application query uses a left join so profile join failures cannot hide submitted applications.
-- Dart analysis: no issues found.
-- Android build and live Supabase were not tested. Apply the supplied SQL to the application's Supabase project before testing live data.
+See MATCHING_TEST_PLAN.md for current executed results and limitations.
+
+24 ranking/handler tests and 30 database checks passed locally. Dart formatting passed. Flutter/Android and live Supabase/Gemini have not been verified for this update. Historical results from earlier versions do not establish validation of this version.

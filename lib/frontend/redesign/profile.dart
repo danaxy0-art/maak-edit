@@ -1,13 +1,15 @@
 import 'app_text_field.dart';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../auth/welcome_screen.dart';
 import '../auth/auth_gate.dart';
 import '../theme/app_theme.dart';
 import 'ui.dart';
-import 'condition_field.dart';
+import 'multi_condition_field.dart';
 import 'registration.dart';
 import 'feedback.dart';
 
@@ -91,7 +93,7 @@ class _ProfilePageState extends State<ProfilePage> {
               _row(
                 Icons.favorite_border,
                 volunteer ? 'Condition experience' : 'Chronic condition',
-                p['condition'],
+                (p['conditions'] as List?)?.join(', ') ?? p['condition'],
               ),
               _row(
                 Icons.language,
@@ -182,7 +184,9 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController(), _about = TextEditingController();
-  String? _condition, _language, _document;
+  List<String> _conditions = [];
+  String? _language, _document;
+  bool _aiConsent = false;
   PlatformFile? _file;
   bool _ready = false, _busy = false;
   Object? _error;
@@ -209,10 +213,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _name.text = p['full_name'] as String? ?? '';
         _about.text =
             p[volunteer ? 'experience' : 'description'] as String? ?? '';
-        _condition = p['condition'] as String?;
-       // القديم _language = p['preferred_language'] as String?;
-       //الجديد
-               final savedLanguage = p['preferred_language'] as String?;
+        _conditions = List<String>.from(p['conditions'] as List);
+        _aiConsent = p['ai_matching_consent'] == true;
+        // القديم _language = p['preferred_language'] as String?;
+        //الجديد
+        final savedLanguage = p['preferred_language'] as String?;
         // Old/unsupported values (e.g. 'French') fall back to English.
         _language = savedLanguage == null || languages.contains(savedLanguage)
             ? savedLanguage
@@ -260,7 +265,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await SupabaseService.saveProfile(
         fullName: _name.text,
         role: widget.role,
-        condition: _condition!,
+        condition: _conditions.first,
+        conditions: _conditions,
+        aiConsent: _aiConsent,
         language: _language!,
         description: _about.text,
         document: uploaded,
@@ -315,30 +322,45 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const FieldLabel('Full name', requiredField: true),
-                    AppTextField(
-                      controller: _name,
-                      maxLength: 30,
-                      validator: validateName,
-                      enabled: !_busy,
-                      liveValidation: true,
-                      showValidCheck: true,
-                      autofillHints: const [AutofillHints.name],
-                      decoration: const InputDecoration(
-                        hintText: 'Your full name',
-                        counterText: '',
-                      ),
-                    ),
+                          AppTextField(
+                            controller: _name,
+                            maxLength: 30,
+                            validator: validateName,
+                            enabled: !_busy,
+                            liveValidation: true,
+                            showValidCheck: true,
+                            autofillHints: const [AutofillHints.name],
+                            decoration: const InputDecoration(
+                              hintText: 'Your full name',
+                              counterText: '',
+                            ),
+                          ),
                           FieldLabel(
                             volunteer
                                 ? 'Condition experience'
                                 : 'Chronic condition',
                             requiredField: true,
                           ),
-                          ConditionField(
-                            value: _condition,
+                          MultiConditionField(
+                            values: _conditions,
                             enabled: !_busy,
-                            onChanged: (v) => setState(() => _condition = v),
+                            onChanged: (v) => setState(() => _conditions = v),
                           ),
+                          if (volunteer)
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _aiConsent,
+                              onChanged: _busy
+                                  ? null
+                                  : (v) =>
+                                        setState(() => _aiConsent = v ?? false),
+                              title: const Text(
+                                'Allow AI experience comparison',
+                              ),
+                              subtitle: const Text(
+                                'Your experience description may be sent to Google Gemini when a help seeker requests AI matching. Do not include names, contact details or documents.',
+                              ),
+                            ),
                           const FieldLabel(
                             'Preferred language',
                             requiredField: true,
@@ -367,17 +389,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             requiredField: volunteer,
                           ),
                           AppTextField(
-                          controller: _about,
-                          maxLength: 300,
-                          maxLines: 4,
-                          enabled: !_busy,
-                          liveValidation: volunteer,
-                          showValidCheck: volunteer,
-                          validator: (v) =>
-                              volunteer && (v == null || v.trim().isEmpty)
-                                  ? 'Describe your experience'
-                                  : null,
-                        ),
+                            controller: _about,
+                            maxLength: 300,
+                            maxLines: 4,
+                            enabled: !_busy,
+                            liveValidation: volunteer,
+                            showValidCheck: volunteer,
+                            validator: (v) =>
+                                volunteer && (v == null || v.trim().isEmpty)
+                                ? 'Describe your experience'
+                                : null,
+                          ),
                           if (widget.reapply) ...[
                             const FieldLabel(
                               'Verification document',

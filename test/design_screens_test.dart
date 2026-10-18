@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:maak_app/frontend/auth/choose_role_screen.dart';
@@ -9,7 +10,9 @@ import 'package:maak_app/frontend/redesign/home.dart';
 import 'package:maak_app/frontend/redesign/profile.dart';
 import 'package:maak_app/frontend/redesign/support.dart';
 import 'package:maak_app/frontend/redesign/notifications.dart';
+
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -161,8 +164,7 @@ void main() {
     'registration': const RegistrationScreen(role: 'help_seeker'),
     'password': const NewPasswordScreen(),
     'rejected': const VolunteerRejectedScreen(
-      rejectionReason:
-          'The uploaded verification document is unclear. Please upload a readable copy.',
+      rejectionReason: 'The uploaded verification document is unclear. Please upload a readable copy.',
     ),
     'reject_dialog': const Scaffold(
       body: RejectApplicationDialog(
@@ -285,10 +287,12 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 250)),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Select your condition'));
-      await tester.tap(find.text('Select your condition'));
+      await tester.ensureVisible(find.text('Select your conditions'));
+      await tester.tap(find.text('Select your conditions'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Diabetes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save selection'));
       await tester.pumpAndSettle();
       final languageField = find.byType(DropdownButton<String>);
       await tester.ensureVisible(languageField);
@@ -327,9 +331,8 @@ void main() {
       MaterialApp(
         theme: AppTheme.light(),
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(1.5)),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.5)),
           child: child!,
         ),
         home: const WelcomeScreen(),

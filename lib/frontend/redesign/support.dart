@@ -1,6 +1,9 @@
+import 'matching_page.dart';
 import 'app_text_field.dart';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import 'ui.dart';
@@ -101,7 +104,19 @@ class _VolunteerDirectoryPageState extends State<VolunteerDirectoryPage> {
 
   @override
   Widget build(BuildContext context) => BotanicalScaffold(
-    appBar: AppBar(title: const Text('Find a volunteer')),
+    appBar: AppBar(
+      title: const Text('Find a volunteer'),
+      actions: [
+        IconButton(
+          tooltip: 'Recommended matches',
+          icon: const Icon(Icons.auto_awesome),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MatchingPage()),
+          ),
+        ),
+      ],
+    ),
     body: ResponsiveBody(
       child: Column(
         children: [
@@ -686,9 +701,8 @@ class SchedulePage extends StatelessWidget {
                 Text(formatDate(row['starts_at'] as String)),
                 const SizedBox(height: 7),
                 RoleChip(
-                  DateTime.parse(
-                        row['starts_at'] as String,
-                      ).isBefore(DateTime.now())
+                  DateTime.parse(row['starts_at'] as String)
+                          .isBefore(DateTime.now())
                       ? 'Past session'
                       : 'Upcoming · 60 min',
                 ),
