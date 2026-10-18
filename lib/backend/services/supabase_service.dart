@@ -25,6 +25,23 @@ class SupabaseService {
     required String email,
     required String password,
   }) => client.auth.signInWithPassword(email: email.trim(), password: password);
+  //كود جديد  
+    /// Sign-up pre-check (Fix 1). Returns true/false, or null when the check
+  /// could not complete (network error / timeout).
+  static Future<bool?> isEmailRegistered(String email) async {
+    try {
+      final result = await Future<dynamic>.sync(
+        () => client.rpc(
+          'email_registered',
+          params: {'p_email': email.trim().toLowerCase()},
+        ),
+      ).timeout(const Duration(seconds: 6));
+      return result is bool ? result : null;
+    } catch (e) {
+      debugPrint('Email pre-check failed: $e');
+      return null;
+    }
+  }
   static Future<AuthResponse> signUp({
     required String fullName,
     required String email,
@@ -246,6 +263,28 @@ class SupabaseService {
     final rows = await client.rpc('admin_volunteer_applications');
     return List<Map<String, dynamic>>.from(rows as List);
   }
+
+  static Future<void> sendVolunteerEmail({
+  required String email,
+  required String name,
+  required String status,
+  String? rejectionReason,
+}) async {
+  final response = await client.functions.invoke(
+    'send-volunteer-email',
+    body: {
+      'email': email.trim(),
+      'name': name.trim(),
+      'status': status,
+      if (rejectionReason != null)
+        'rejectionReason': rejectionReason.trim(),
+    },
+  );
+
+  if (response.status < 200 || response.status >= 300) {
+    throw StateError('Unable to send volunteer email.');
+  }
+}
 
   static Future<void> approveVolunteerApplication(String id) async =>
       await client.rpc(

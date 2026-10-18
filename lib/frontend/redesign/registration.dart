@@ -11,7 +11,7 @@ import 'feedback.dart';
 import 'password_fields.dart';
 import 'ui.dart';
 
-const languages = ['Arabic', 'English', 'French'];
+const languages = ['Arabic', 'English'];
 
 class RegistrationScreen extends StatefulWidget {
   final String role;
