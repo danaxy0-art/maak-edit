@@ -163,6 +163,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             'Your application could not be confirmed. Please retry submission.',
           );
         }
+        // The application is saved; a failed optional email must not block it.
+        // The server sends it only to this signed-in volunteer's own address.
+        try {
+          await SupabaseService.sendVolunteerEmail(status: 'pending');
+        } catch (e) {
+          debugPrint('Volunteer pending email failed: $e');
+        }
       }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -219,6 +226,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   controller: _name,
                   maxLength: 80,
                   validator: validateName,
+                  liveValidation: true,
+                  showValidCheck: true,
+                  autofillHints: const [AutofillHints.name],
                   decoration: const InputDecoration(
                     hintText: 'Your full name',
                     counterText: '',
@@ -229,6 +239,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   validator: validateEmail,
+                  liveValidation: true,
+                  showValidCheck: true,
+                  autofillHints: const [AutofillHints.email],
+                  autocorrect: false,
+                  enableSuggestions: false,
                   decoration: const InputDecoration(
                     hintText: 'you@example.com',
                   ),
