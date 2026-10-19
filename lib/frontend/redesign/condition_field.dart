@@ -159,11 +159,6 @@ class _ConditionFieldState extends State<ConditionField> {
         builder: (field) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (field.hasError)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: FieldErrorNotice(field.errorText!),
-              ),
             InkWell(
               onTap: widget.enabled ? () => _select(names, field) : null,
               borderRadius: BorderRadius.circular(12),
@@ -190,6 +185,8 @@ class _ConditionFieldState extends State<ConditionField> {
                 ),
               ),
             ),
+            // Error message sits below the selector.
+            if (field.hasError) FieldErrorNotice(field.errorText!),
           ],
         ),
       );

@@ -26,23 +26,6 @@ class SupabaseService {
     required String email,
     required String password,
   }) => client.auth.signInWithPassword(email: email.trim(), password: password);
-  //كود جديد
-  /// Sign-up pre-check (Fix 1). Returns true/false, or null when the check
-  /// could not complete (network error / timeout).
-  static Future<bool?> isEmailRegistered(String email) async {
-    try {
-      final result = await Future<dynamic>.sync(
-        () => client.rpc(
-          'email_registered',
-          params: {'p_email': email.trim().toLowerCase()},
-        ),
-      ).timeout(const Duration(seconds: 6));
-      return result is bool ? result : null;
-    } catch (e) {
-      debugPrint('Email pre-check failed: $e');
-      return null;
-    }
-  }
 
   static Future<AuthResponse> signUp({
     required String fullName,
@@ -269,10 +252,32 @@ class SupabaseService {
     bool active = true,
   }) async {
     final values = {'name': name.trim(), 'is_active': active};
+
     if (id == null) {
-      await client.from('chronic_conditions').insert(values);
+      final saved = await client
+          .from('chronic_conditions')
+          .insert(values)
+          .select('id')
+          .maybeSingle();
+
+      if (saved == null) {
+        throw ArgumentError(
+          'The condition could not be added. Check your Admin permissions.',
+        );
+      }
     } else {
-      await client.from('chronic_conditions').update(values).eq('id', id);
+      final saved = await client
+          .from('chronic_conditions')
+          .update(values)
+          .eq('id', id)
+          .select('id')
+          .maybeSingle();
+
+      if (saved == null) {
+        throw ArgumentError(
+          'The condition was not updated. Refresh the list and check your Admin permissions.',
+        );
+      }
     }
   }
 
@@ -289,19 +294,19 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(rows as List);
   }
 
+  /// Asks the server to email a volunteer about their application.
+  /// The server resolves the recipient, name and rejection reason itself:
+  /// 'pending' goes to the signed-in volunteer; 'approved'/'rejected' need an
+  /// admin session and the reviewed volunteer's [volunteerId].
   static Future<void> sendVolunteerEmail({
-    required String email,
-    required String name,
     required String status,
-    String? rejectionReason,
+    String? volunteerId,
   }) async {
     final response = await client.functions.invoke(
       'send-volunteer-email',
       body: {
-        'email': email.trim(),
-        'name': name.trim(),
         'status': status,
-        if (rejectionReason != null) 'rejectionReason': rejectionReason.trim(),
+        if (volunteerId != null) 'volunteerId': volunteerId,
       },
     );
 

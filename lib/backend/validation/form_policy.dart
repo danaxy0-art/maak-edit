@@ -38,13 +38,6 @@ String? validateEmail(String? value) {
   return null;
 }
 
-/// Shown under the email field when the address already has an account.
-const emailRegisteredMessage =
-    'This email is already registered. Please log in.';
-
-/// Normalizes an email before checking it: trim + lowercase.
-String normalizeEmail(String value) => value.trim().toLowerCase();
-
 String? validateUsername(String? value) {
   final v = value?.trim() ?? '';
 
