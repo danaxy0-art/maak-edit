@@ -530,6 +530,13 @@ class SupabaseService {
         'decide_support_request',
         params: {'p_request_id': id, 'p_accept': accepted},
       );
+
+  static Future<void> cancelRequest(String id) async => await client.rpc(
+ 'cancel_support_request',
+ params: {'p_request_id': id},
+    );
+
+  
   static Stream<List<Map<String, dynamic>>> messageStream(String requestId) =>
       client
           .from('messages')
