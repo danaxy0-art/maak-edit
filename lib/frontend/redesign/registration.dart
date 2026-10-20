@@ -34,6 +34,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _password = TextEditingController(),
       _confirmation = TextEditingController(),
       _about = TextEditingController();
+  final _otherName = TextEditingController();
   List<String> _conditions = [];
   String? _language;
   bool _aiConsent = false;
@@ -69,7 +70,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _email, _password, _confirmation, _about]) {
+    for (final c in [
+      _name,
+      _email,
+      _password,
+      _confirmation,
+      _about,
+      _otherName,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -152,6 +160,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         condition: _conditions.first,
         conditions: _conditions,
         aiConsent: _aiConsent,
+        otherName: _conditions.contains('Other') ? _otherName.text : null,
         language: _language!,
         description: _about.text,
         document: _uploadedPath,
@@ -285,6 +294,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 MultiConditionField(
                   values: _conditions,
+                  otherController: _otherName,
                   enabled: !_busy,
                   onChanged: (v) => setState(() => _conditions = v),
                 ),

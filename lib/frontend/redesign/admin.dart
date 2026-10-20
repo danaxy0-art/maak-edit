@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../theme/app_theme.dart';
@@ -9,6 +10,7 @@ import 'ui.dart';
 import 'app_text_field.dart';
 import 'profile.dart';
 import 'feedback.dart';
+import 'condition_reviews.dart';
 
 // Admin layouts use a wider content area on tablets while preserving
 // Ma'ak's existing theme, bottom navigation, and phone widths.
@@ -417,9 +419,8 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                   final condition =
                       (row['condition_experience'] as String? ?? '')
                           .toLowerCase();
-                  final status = _statusLabel(
-                    row['status'] as String?,
-                  ).toLowerCase();
+                  final status = _statusLabel(row['status'] as String?)
+                      .toLowerCase();
                   return name.contains(_search) ||
                       condition.contains(_search) ||
                       status.contains(_search);
@@ -536,9 +537,8 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
 
   Future<List<Map<String, dynamic>>> _fetchConditions() async {
     try {
-      final rows = await SupabaseService.getConditions(
-        activeOnly: false,
-      ).timeout(const Duration(seconds: 15));
+      final rows = await SupabaseService.getConditions(activeOnly: false)
+          .timeout(const Duration(seconds: 15));
       return rows;
     } catch (error) {
       debugPrint('Admin conditions load failed: ${error.runtimeType}');
@@ -626,6 +626,18 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
                   icon: Icons.add,
                   onPressed: _edit,
                 ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ConditionRequestsPage(),
+                      ),
+                    );
+                    if (mounted) setState(_load);
+                  },
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('Review Other condition requests'),
+                ),
               ],
             ),
           ),
@@ -711,7 +723,9 @@ class _ConditionsAdminPageState extends State<ConditionsAdminPage> {
                                 ),
                                 IconButton(
                                   tooltip: 'Edit condition',
-                                  onPressed: _saving.contains(row['id'])
+                                  onPressed:
+                                      _saving.contains(row['id']) ||
+                                          row['is_other'] == true
                                       ? null
                                       : () => _edit(row),
                                   icon: const Icon(
@@ -894,8 +908,7 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
         error.message.contains('application_changed')) {
       setState(() {
         _stale = true;
-        _notice =
-            'This application has changed. Return to the list to load its current status.';
+        _notice = 'This application has changed. Return to the list to load its current status.';
       });
     }
     showAppError(context, error);
@@ -967,8 +980,7 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
       if (result == 'stale') {
         setState(() {
           _stale = true;
-          _notice =
-              'This application has changed. Return to the list to load its current status.';
+          _notice = 'This application has changed. Return to the list to load its current status.';
         });
       } else {
         _completeReview(
@@ -1170,8 +1182,7 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
     if (_busy || !_form.currentState!.validate()) return;
     if (widget.userId.trim().isEmpty) {
       setState(
-        () => _error =
-            'This application has no volunteer ID. Close this dialog and refresh the list.',
+        () => _error = 'This application has no volunteer ID. Close this dialog and refresh the list.',
       );
       return;
     }

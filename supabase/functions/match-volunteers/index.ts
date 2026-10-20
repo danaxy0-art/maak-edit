@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { cosine, rankMatches } from './matching.mjs';
+import { cosine, rankMatches, generalSuggestions } from './matching.mjs';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...headers,'Content-Type':'application/json'}});
 const recent=new Map<string,number>();
@@ -17,6 +17,7 @@ Deno.serve(async(req)=>{
   const {data:context,error}=await client.rpc('maak_matching_context');
   if(error)return reply({error:error.message.includes('not_allowed')?'help_seeker_only':'matching_setup_or_profile_incomplete'},error.message.includes('not_allowed')?403:409);
   const {seeker,candidates}=context;
+  if(context.general_mode===true) return reply({...generalSuggestions(seeker,candidates),mode:'general',notice:'General suggestions only. Your submitted condition is not used for matching until approved. No disease score or AI comparison is applied.',seeker_conditions:seeker.conditions,scoring_version:'general-v1'});
   let mode='conditions';let notice='Ranked by shared conditions, then preferred language.';
   const semantic:Record<string,number>={};
   const key=Deno.env.get('GEMINI_API_KEY');

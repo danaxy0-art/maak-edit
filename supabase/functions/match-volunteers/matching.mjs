@@ -32,3 +32,9 @@ export function rankMatches(seeker, candidates, semantic = {}) {
  }
  return {matches:ranked,complementary:team,uncovered_conditions:[...uncovered].map(id=>({id,name:wanted.get(id)}))};
 }
+
+export function generalSuggestions(seeker,candidates) {
+ const seen=new Set();
+ const matches=(candidates??[]).filter(c=>c.status==='approved'&&!seen.has(c.user_id)&&seen.add(c.user_id)).map(c=>({...c,shared_conditions:[],shared_count:0,coverage_percent:null,experience_similarity:null,same_language:c.language===seeker.language})).sort((a,b)=>Number(b.same_language)-Number(a.same_language)||a.user_id.localeCompare(b.user_id));
+ return {matches,complementary:[],uncovered_conditions:[]};
+}
