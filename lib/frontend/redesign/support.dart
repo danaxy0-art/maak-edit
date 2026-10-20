@@ -649,6 +649,8 @@ class JourneyPage extends StatelessWidget {
                 ? 'Awaiting response'
                 : row['status'] == 'accepted'
                 ? 'Connected'
+                : row['status'] == 'canceled'
+                ? 'Canceled'
                 : 'Declined',
           ),
           const SizedBox(height: 14),
@@ -658,6 +660,11 @@ class JourneyPage extends StatelessWidget {
                 : 'Your support request has been recorded.',
             style: const TextStyle(color: AppColors.textMuted),
           ),
+          if (row['status'] == 'pending')
+            CancelRequestButton(
+              requestId: row['id'] as String,
+              onDone: reload,
+            ),
           if (row['status'] == 'accepted')
             TextButton(
               onPressed: () => Navigator.push(
@@ -670,8 +677,67 @@ class JourneyPage extends StatelessWidget {
       ),
     ),
   );
+}  
+// بدايت تعديلي
+class CancelRequestButton extends StatefulWidget {
+  final String requestId;
+  final VoidCallback onDone;
+  const CancelRequestButton({
+    super.key,
+    required this.requestId,
+    required this.onDone,
+  });
+  @override
+  State<CancelRequestButton> createState() => _CancelRequestButtonState();
 }
 
+class _CancelRequestButtonState extends State<CancelRequestButton> {
+  bool _busy = false;
+  Future<void> _cancel() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this request?'),
+        content: const Text('The volunteer will be notified.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep request'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancel request'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    setState(() {
+      _busy = true;
+    });
+    try {
+      await SupabaseService.cancelRequest(widget.requestId);
+      if (!mounted) return;
+      showSuccess(context, 'Request canceled.');
+      widget.onDone();
+    } catch (e) {
+      if (mounted) showAppError(context, e, retry: _cancel);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: _busy ? null : _cancel,
+    child: Text(_busy ? 'Canceling...' : 'Cancel request'),
+  );
+}
+//نهايت  تعديل 
 class SchedulePage extends StatelessWidget {
   const SchedulePage({super.key});
   @override
