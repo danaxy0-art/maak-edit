@@ -50,6 +50,10 @@ String friendlyError(Object error) {
     if (error.message.contains('reason_required')) {
       return 'Enter a rejection reason.';
     }
+
+    if (error.message.contains('request_changed')) {
+ return 'This request is no longer pending, so it cannot be canceled. Refresh the list.;'
+}
     if (error.message.contains('application_changed')) {
       return 'This application has already been reviewed. Refresh the list.';
     }
