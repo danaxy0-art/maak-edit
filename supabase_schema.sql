@@ -36,9 +36,11 @@ create index if not exists notifications_user_date on public.notifications(user_
 create table if not exists public.support_requests (
   id uuid primary key default gen_random_uuid(), seeker_id uuid not null references auth.users(id) on delete cascade,
   volunteer_id uuid not null references auth.users(id) on delete cascade,
-  status text not null default 'pending' check(status in ('pending','accepted','declined')),
+  status text not null default 'pending' check(status in ('pending','accepted','declined','canceled')),
   created_at timestamptz not null default now(), check(seeker_id <> volunteer_id));
 create unique index if not exists one_open_request on public.support_requests(seeker_id,volunteer_id) where status in ('pending','accepted');
+alter table public.support_requests drop constraint if exists support_requests_status_check;
+alter table public.support_requests add constraint support_requests_status_check check(status in ('pending','accepted','declined','canceled'));
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(), request_id uuid not null references public.support_requests(id) on delete cascade,
   sender_id uuid not null references auth.users(id) on delete cascade,
@@ -238,6 +240,15 @@ begin
     case when p_accept then 'Your support request was accepted' else 'Support request declined' end,
     case when p_accept then 'You can now start a conversation.' else 'You can choose another volunteer.' end,'request',p_request_id);
 end; $$;
+
+create or replace function public.cancel_support_request(p_request_id uuid) returns void language plpgsql security definer set search_path=public as $$
+declare vol uuid;
+begin
+  update support_requests set status='canceled'
+    where id=p_request_id and seeker_id=auth.uid() and status='pending' returning volunteer_id into vol;
+  if not found then raise exception 'request_changed'; end if;
+  insert into notifications(user_id,title,body,kind,reference_id) values(vol,'Support request canceled','The help seeker canceled their pending request.','request',p_request_id);
+end; $$;
 create or replace function public.notify_maak_message() returns trigger language plpgsql security definer set search_path=public as $$
 declare recipient uuid; sender_name text;
 begin
@@ -290,7 +301,7 @@ create policy maak_document_read on storage.objects for select to authenticated 
 do $$ declare f record; begin
   for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.proname in ('save_maak_profile','admin_volunteer_applications','review_volunteer_application',
-    'browse_volunteers','request_peer_support','my_support_requests','decide_support_request','book_support_session','my_support_sessions') loop
+    'browse_volunteers','request_peer_support','my_support_requests','decide_support_request','cancel_support_request','book_support_session','my_support_sessions') loop
     execute format('revoke all on function %s from public,anon',f.sig);
     execute format('grant execute on function %s to authenticated',f.sig);
   end loop;
