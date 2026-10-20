@@ -20,109 +20,386 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
+
 class _ProfilePageState extends State<ProfilePage> {
   late Future<Map<String, dynamic>> _future;
+
+  // Prevent duplicate deletion requests while the operation is running.
+  bool _deletingAccount = false;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  // Load the profile information for the current user.
   void _load() =>
       _future = SupabaseService.loadProfileForEdit(role: widget.role);
+
+  // Open the edit profile screen and refresh the profile after saving.
   Future<void> _edit() async {
     final saved = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => EditProfilePage(role: widget.role)),
+      MaterialPageRoute(
+        builder: (_) => EditProfilePage(role: widget.role),
+      ),
     );
-    if (saved == true && mounted) setState(_load);
+
+    if (saved == true && mounted) {
+      setState(_load);
+    }
+  }
+
+  
+  /// Displays a clear warning before permanent account deletion.
+  /// Requires explicit acknowledgment to prevent accidental deletion.
+  Future<void> _confirmDeleteAccount() async {
+    if (_deletingAccount) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        // Track acknowledgment inside the dialog only.
+        bool acknowledged = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+
+            // Highlight the destructive nature of the action.
+            title: const Column(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Color(0xFFFFE8E6),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFB42318),
+                    size: 34,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Permanently delete your account?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'MaakSerif',
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'This action is permanent and cannot be undone.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Explain the consequences before asking for consent.
+                    const Text(
+                      'Deleting your account will remove:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
+                    const _DeleteInfoRow(
+                      'Your profile and personal information',
+                    ),
+                    const _DeleteInfoRow(
+                      'Your account and associated data',
+                    ),
+
+                    // Verification documents apply to volunteers only.
+                    if (widget.role == 'volunteer')
+                      const _DeleteInfoRow(
+                        'Your verification documents',
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // A distinct warning reinforces the irreversible action.
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F0),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Color(0xFFB42318),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'You will permanently lose access to this account.',
+                              style: TextStyle(
+                                color: Color(0xFF912018),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Require an intentional acknowledgment.
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: acknowledged,
+                      onChanged: (value) {
+                        setDialogState(
+                          () => acknowledged = value ?? false,
+                        );
+                      },
+                      title: const Text(
+                        'I understand that this action is permanent.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Provide a safe exit and disable deletion until acknowledged.
+            actions: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: acknowledged
+                        ? () => Navigator.pop(dialogContext, true)
+                        : null,
+                    icon: const Icon(Icons.delete_forever_outlined),
+                    label: const Text('Delete account permanently'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFB42318),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFE6B9B5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Keep my account'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    // Cancel or close the dialog without deleting the account.
+    if (confirmed != true || !mounted) return;
+
+    // Delete only after explicit user confirmation.
+    await _deleteAccount();
+  }
+
+
+  /// Requests permanent account deletion through the Supabase service.
+  /// Navigates to the welcome screen only after successful deletion.
+  Future<void> _deleteAccount() async {
+    if (_deletingAccount) return;
+
+    // Disable repeated actions and display a loading indicator.
+    setState(() => _deletingAccount = true);
+
+    try {
+      // The Edge Function verifies the user and deletes their account.
+      await SupabaseService.deleteAccount();
+
+      if (!mounted) return;
+
+      // Remove the profile screen from the navigation history.
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const WelcomeScreen(),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      // Keep the user on the current screen if deletion fails.
+      if (mounted) {
+        showAppError(context, e);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deletingAccount = false);
+      }
+    }
   }
 
   @override
-  Widget build(BuildContext context) => BotanicalScaffold(
-    appBar: AppBar(
-      title: const Text('My profile'),
-      automaticallyImplyLeading: false,
-    ),
-    body: ResponsiveBody(
-      child: FutureBuilder<Map<String, dynamic>>(
-        future: _future,
-        builder: (context, s) {
-          if (s.hasError) {
-            return EmptyState(
-              'Could not load profile',
-              friendlyError(s.error!),
-              retry: () => setState(_load),
-            );
-          }
-          if (!s.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final p = s.data!, volunteer = widget.role == 'volunteer';
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 15, 20, 28),
-            children: [
-              Center(
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: const Color(0xFFCDDEF5),
-                  child: Text(
-                    initials(p['full_name'] as String? ?? ''),
-                    style: const TextStyle(
-                      fontFamily: 'MaakSerif',
-                      fontSize: 30,
-                      fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) => PopScope(
+    // Prevent leaving the screen while account deletion is in progress.
+    canPop: !_deletingAccount,
+    child: BotanicalScaffold(
+      appBar: AppBar(
+        title: const Text('My profile'),
+        automaticallyImplyLeading: false,
+      ),
+      body: ResponsiveBody(
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _future,
+          builder: (context, s) {
+            if (s.hasError) {
+              return EmptyState(
+                'Could not load profile',
+                friendlyError(s.error!),
+                retry: () => setState(_load),
+              );
+            }
+
+            if (!s.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            final p = s.data!;
+            final volunteer = widget.role == 'volunteer';
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 15, 20, 28),
+              children: [
+                Center(
+                  child: CircleAvatar(
+                    radius: 48,
+                    backgroundColor: const Color(0xFFCDDEF5),
+                    child: Text(
+                      initials(p['full_name'] as String? ?? ''),
+                      style: const TextStyle(
+                        fontFamily: 'MaakSerif',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                p['full_name'] as String? ?? '',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'MaakSerif',
-                  fontSize: 23,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(height: 18),
+                Text(
+                  p['full_name'] as String? ?? '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'MaakSerif',
+                    fontSize: 23,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Center(child: RoleChip(volunteer ? 'Volunteer' : 'Help seeker')),
-              const SizedBox(height: 26),
-              _row(Icons.mail_outline, 'Email', p['email']),
-              _row(
-                Icons.favorite_border,
-                volunteer ? 'Condition experience' : 'Chronic condition',
-                (p['conditions'] as List?)?.join(', ') ?? p['condition'],
-              ),
-              _row(
-                Icons.language,
-                'Preferred language',
-                p['preferred_language'],
-              ),
-              _row(
-                Icons.description_outlined,
-                volunteer ? 'My experience' : 'About me',
-                p[volunteer ? 'experience' : 'description'],
-              ),
-              const SizedBox(height: 10),
-              PrimaryButton(
-                'Edit profile',
-                icon: Icons.edit_outlined,
-                onPressed: _edit,
-              ),
-              const SizedBox(height: 14),
-              TextButton.icon(
-                onPressed: () => logout(context),
-                icon: const Icon(Icons.logout),
-                label: const Text('Log out'),
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: 10),
+                Center(
+                  child: RoleChip(
+                    volunteer ? 'Volunteer' : 'Help seeker',
+                  ),
+                ),
+                const SizedBox(height: 26),
+                _row(
+                  Icons.mail_outline,
+                  'Email',
+                  p['email'],
+                ),
+                _row(
+                  Icons.favorite_border,
+                  volunteer
+                      ? 'Condition experience'
+                      : 'Chronic condition',
+                  (p['conditions'] as List?)?.join(', ') ??
+                      p['condition'],
+                ),
+                _row(
+                  Icons.language,
+                  'Preferred language',
+                  p['preferred_language'],
+                ),
+                _row(
+                  Icons.description_outlined,
+                  volunteer ? 'My experience' : 'About me',
+                  p[volunteer ? 'experience' : 'description'],
+                ),
+                const SizedBox(height: 10),
+
+                // Existing profile editing action.
+                PrimaryButton(
+                  'Edit profile',
+                  icon: Icons.edit_outlined,
+                  onPressed: _deletingAccount ? null : _edit,
+                ),
+                const SizedBox(height: 14),
+
+                // Existing logout action.
+                TextButton.icon(
+                  onPressed: _deletingAccount
+                      ? null
+                      : () => logout(context),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Log out'),
+                ),
+
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+
+                // Destructive action is visually separated from
+                // regular profile actions to prevent accidental taps.
+                TextButton.icon(
+                  onPressed: _deletingAccount
+                      ? null
+                      : _confirmDeleteAccount,
+                  icon: _deletingAccount
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.delete_outline),
+                  label: Text(
+                    _deletingAccount
+                        ? 'Deleting account...'
+                        : 'Delete account',
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     ),
   );
+
+  // Display one profile field using the existing app design.
   Widget _row(IconData icon, String label, dynamic value) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: SurfaceCard(
@@ -130,7 +407,11 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primaryNavy, size: 22),
+          Icon(
+            icon,
+            color: AppColors.primaryNavy,
+            size: 22,
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -148,7 +429,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   value == null || value.toString().isEmpty
                       ? 'Not provided'
                       : value.toString(),
-                  style: const TextStyle(fontSize: 14, height: 1.45),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -158,6 +442,37 @@ class _ProfilePageState extends State<ProfilePage> {
     ),
   );
 }
+
+
+/// Displays an item describing data affected by account deletion.
+class _DeleteInfoRow extends StatelessWidget {
+  final String text;
+
+  const _DeleteInfoRow(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.check_circle_outline,
+          size: 19,
+          color: AppColors.primaryNavy,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 
 Future<void> logout(BuildContext context) async {
   try {

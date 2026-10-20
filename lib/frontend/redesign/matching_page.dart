@@ -64,19 +64,21 @@ class _MatchingPageState extends State<MatchingPage> {
           FutureBuilder<Map<String, dynamic>>(
             future: _future,
             builder: (context, s) {
-              if (s.hasError)
+              if (s.hasError) {
                 return EmptyState(
                   'Could not load recommendations',
                   friendlyError(s.error!),
                   retry: _reload,
                 );
-              if (!s.hasData)
+              }
+              if (!s.hasData) {
                 return const Center(
                   child: Padding(
                     padding: EdgeInsets.all(30),
                     child: CircularProgressIndicator(),
                   ),
                 );
+              }
               final data = s.data!;
               final matches = List<Map<String, dynamic>>.from(
                 data['matches'] as List? ?? [],

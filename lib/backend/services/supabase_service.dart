@@ -97,6 +97,36 @@ class SupabaseService {
     await client.auth.signOut();
   }
 
+
+  /// Permanently deletes the currently authenticated user's account.
+  /// Supports both Help Seekers and Volunteers.
+  static Future<void> deleteAccount() async {
+    // Ensure the user is signed in before requesting account deletion.
+    if (currentUser == null) {
+      throw StateError('Please sign in to delete your account.');
+    }
+
+    // Call the secure Supabase Edge Function to delete the account.
+    // The server verifies the user's identity and performs the deletion.
+    final response = await client.functions.invoke(
+      'delete-account',
+      method: HttpMethod.post,
+      body: <String, dynamic>{},
+    );
+
+    // Stop the process if the server could not complete the deletion.
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError(
+        'Unable to delete your account. Please try again.',
+      );
+    }
+
+    // Clear recovery state and remove the local session after success.
+    _recoveryUserId = null;
+    await client.auth.signOut(scope: SignOutScope.local);
+  }
+
+
   static Future<String?> getMyRole() async {
     if (currentUser == null) return null;
     final row = await client
