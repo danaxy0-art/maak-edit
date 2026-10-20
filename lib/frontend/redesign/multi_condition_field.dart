@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../backend/validation/other_condition_policy.dart';
+
 import '../../backend/services/supabase_service.dart';
 import 'app_text_field.dart';
 import 'feedback.dart';
@@ -9,11 +11,13 @@ class MultiConditionField extends StatefulWidget {
   final List<String> values;
   final ValueChanged<List<String>> onChanged;
   final bool enabled;
+  final TextEditingController? otherController;
   const MultiConditionField({
     super.key,
     required this.values,
     required this.onChanged,
     this.enabled = true,
+    this.otherController,
   });
   @override
   State<MultiConditionField> createState() => _MultiConditionFieldState();
@@ -21,6 +25,15 @@ class MultiConditionField extends StatefulWidget {
 
 class _MultiConditionFieldState extends State<MultiConditionField> {
   late Future<List<Map<String, dynamic>>> _future;
+  Map<String, List<String>> _optionAliases = {};
+  final _fallback = TextEditingController();
+  TextEditingController get _other => widget.otherController ?? _fallback;
+  @override
+  void dispose() {
+    _fallback.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -61,7 +74,11 @@ class _MultiConditionFieldState extends State<MultiConditionField> {
                     child: ListView(
                       children: [
                         for (final name in names.where(
-                          (n) => n.toLowerCase().contains(query),
+                          (n) =>
+                              n.toLowerCase().contains(query) ||
+                              (_optionAliases[n] ?? []).any(
+                                (alias) => alias.toLowerCase().contains(query),
+                              ),
                         ))
                           CheckboxListTile(
                             title: Text(name),
@@ -118,6 +135,12 @@ class _MultiConditionFieldState extends State<MultiConditionField> {
               : const LinearProgressIndicator(),
         );
       }
+      _optionAliases = {
+        for (final row in snapshot.data!)
+          row['name'] as String: List<String>.from(
+            row['aliases'] as List? ?? [],
+          ),
+      };
       final active = snapshot.data!.map((r) => r['name'] as String).toList();
       // Existing disabled choices can be retained but cannot be newly added.
       final names = {...active, ...widget.values}.toList();
@@ -146,6 +169,75 @@ class _MultiConditionFieldState extends State<MultiConditionField> {
                     : widget.values.join(', '),
               ),
             ),
+            if (widget.values.contains('Other')) ...[
+              const FieldLabel('Other condition name', requiredField: true),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _other,
+                builder: (context, value, child) {
+                  final suggestions = suggestConditions(
+                    value.text,
+                    snapshot.data!,
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppTextField(
+                        controller: _other,
+                        enabled: widget.enabled,
+                        maxLength: 60,
+                        validator: (v) {
+                          final error = validateOtherCondition(v);
+                          if (error != null) return error;
+                          final q = normalizeOtherCondition(v ?? '')
+                              .toLowerCase();
+                          if (snapshot.data!.any(
+                            (c) =>
+                                c['is_other'] != true &&
+                                c['name'] != 'Other' &&
+                                ([
+                                  c['name'],
+                                  ...List<String>.from(
+                                    c['aliases'] as List? ?? [],
+                                  ),
+                                ].any(
+                                  (n) => n.toString().trim().toLowerCase() == q,
+                                )),
+                          ))
+                            return 'This condition is already listed. Select it from the suggestions.';
+                          return null;
+                        },
+                        decoration: const InputDecoration(
+                          hintText: 'Type a condition name',
+                        ),
+                      ),
+                      for (final option in suggestions)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.search),
+                          title: Text(option['name'] as String),
+                          subtitle: const Text(
+                            'Choose this existing condition',
+                          ),
+                          onTap: !widget.enabled
+                              ? null
+                              : () {
+                                  final selected = widget.values.toSet()
+                                    ..remove('Other')
+                                    ..add(option['name'] as String);
+                                  _other.clear();
+                                  field.didChange(selected.toList());
+                                  widget.onChanged(selected.toList());
+                                },
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const Text(
+                'Pending admin review. Your account remains available. This text is not used for matching. An optional admin AI check may examine the name only.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
           ],
         ),
       );

@@ -20,7 +20,6 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-
 class _ProfilePageState extends State<ProfilePage> {
   late Future<Map<String, dynamic>> _future;
 
@@ -41,9 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _edit() async {
     final saved = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => EditProfilePage(role: widget.role),
-      ),
+      MaterialPageRoute(builder: (_) => EditProfilePage(role: widget.role)),
     );
 
     if (saved == true && mounted) {
@@ -51,7 +48,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  
   /// Displays a clear warning before permanent account deletion.
   /// Requires explicit acknowledgment to prevent accidental deletion.
   Future<void> _confirmDeleteAccount() async {
@@ -124,15 +120,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     const _DeleteInfoRow(
                       'Your profile and personal information',
                     ),
-                    const _DeleteInfoRow(
-                      'Your account and associated data',
-                    ),
+                    const _DeleteInfoRow('Your account and associated data'),
 
                     // Verification documents apply to volunteers only.
                     if (widget.role == 'volunteer')
-                      const _DeleteInfoRow(
-                        'Your verification documents',
-                      ),
+                      const _DeleteInfoRow('Your verification documents'),
 
                     const SizedBox(height: 16),
 
@@ -146,10 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: const Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: Color(0xFFB42318),
-                          ),
+                          Icon(Icons.error_outline, color: Color(0xFFB42318)),
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -171,9 +160,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       controlAffinity: ListTileControlAffinity.leading,
                       value: acknowledged,
                       onChanged: (value) {
-                        setDialogState(
-                          () => acknowledged = value ?? false,
-                        );
+                        setDialogState(() => acknowledged = value ?? false);
                       },
                       title: const Text(
                         'I understand that this action is permanent.',
@@ -223,7 +210,6 @@ class _ProfilePageState extends State<ProfilePage> {
     await _deleteAccount();
   }
 
-
   /// Requests permanent account deletion through the Supabase service.
   /// Navigates to the welcome screen only after successful deletion.
   Future<void> _deleteAccount() async {
@@ -240,9 +226,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Remove the profile screen from the navigation history.
       Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const WelcomeScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
         (_) => false,
       );
     } catch (e) {
@@ -279,9 +263,7 @@ class _ProfilePageState extends State<ProfilePage> {
             }
 
             if (!s.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
             final p = s.data!;
@@ -316,23 +298,49 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 10),
                 Center(
-                  child: RoleChip(
-                    volunteer ? 'Volunteer' : 'Help seeker',
-                  ),
+                  child: RoleChip(volunteer ? 'Volunteer' : 'Help seeker'),
                 ),
                 const SizedBox(height: 26),
-                _row(
-                  Icons.mail_outline,
-                  'Email',
-                  p['email'],
-                ),
+                if (p['setup_incomplete'] == true)
+                  const FieldErrorNotice(
+                    'Your basic profile is available. The administrator must apply the database updates before you can save condition changes.',
+                  ),
+                if (p['profile_complete'] != true) ...[
+                  const FieldErrorNotice(
+                    'Your profile has not been completed yet.',
+                  ),
+                  PrimaryButton(
+                    'Complete my profile',
+                    onPressed: () => Navigator.of(context)
+                        .push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => RegistrationScreen(
+                              role: widget.role,
+                              completionOnly: true,
+                            ),
+                          ),
+                        )
+                        .then((_) {
+                          if (mounted) setState(_load);
+                        }),
+                  ),
+                ],
+                for (final review in (p['condition_reviews'] as List? ?? []))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SurfaceCard(
+                      child: Text(
+                        'Condition: ${review['submitted_name']}\nStatus: ${review['status']}${review['reason'] == null ? '' : '\nReason: ${review['reason']}'}',
+                      ),
+                    ),
+                  ),
+                _row(Icons.mail_outline, 'Email', p['email']),
                 _row(
                   Icons.favorite_border,
                   volunteer
-                      ? 'Condition experience'
-                      : 'Chronic condition',
-                  (p['conditions'] as List?)?.join(', ') ??
-                      p['condition'],
+                      ? 'Current condition experience'
+                      : 'Current chronic conditions',
+                  (p['conditions'] as List?)?.join(', ') ?? p['condition'],
                 ),
                 _row(
                   Icons.language,
@@ -356,9 +364,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                 // Existing logout action.
                 TextButton.icon(
-                  onPressed: _deletingAccount
-                      ? null
-                      : () => logout(context),
+                  onPressed: _deletingAccount ? null : () => logout(context),
                   icon: const Icon(Icons.logout),
                   label: const Text('Log out'),
                 ),
@@ -370,26 +376,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 // Destructive action is visually separated from
                 // regular profile actions to prevent accidental taps.
                 TextButton.icon(
-                  onPressed: _deletingAccount
-                      ? null
-                      : _confirmDeleteAccount,
+                  onPressed: _deletingAccount ? null : _confirmDeleteAccount,
                   icon: _deletingAccount
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_outline),
                   label: Text(
-                    _deletingAccount
-                        ? 'Deleting account...'
-                        : 'Delete account',
+                    _deletingAccount ? 'Deleting account...' : 'Delete account',
                   ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
                 ),
               ],
             );
@@ -407,11 +405,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: AppColors.primaryNavy,
-            size: 22,
-          ),
+          Icon(icon, color: AppColors.primaryNavy, size: 22),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -429,10 +423,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   value == null || value.toString().isEmpty
                       ? 'Not provided'
                       : value.toString(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
+                  style: const TextStyle(fontSize: 14, height: 1.45),
                 ),
               ],
             ),
@@ -442,7 +433,6 @@ class _ProfilePageState extends State<ProfilePage> {
     ),
   );
 }
-
 
 /// Displays an item describing data affected by account deletion.
 class _DeleteInfoRow extends StatelessWidget {
@@ -462,17 +452,11 @@ class _DeleteInfoRow extends StatelessWidget {
           color: AppColors.primaryNavy,
         ),
         const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(fontSize: 14),
-          ),
-        ),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
       ],
     ),
   );
 }
-
 
 Future<void> logout(BuildContext context) async {
   try {
@@ -499,6 +483,7 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController(), _about = TextEditingController();
+  final _otherName = TextEditingController();
   List<String> _conditions = [];
   String? _language, _document;
   bool _aiConsent = false;
@@ -516,6 +501,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void dispose() {
     _name.dispose();
     _about.dispose();
+    _otherName.dispose();
     super.dispose();
   }
 
@@ -529,6 +515,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _about.text =
             p[volunteer ? 'experience' : 'description'] as String? ?? '';
         _conditions = List<String>.from(p['conditions'] as List);
+        _otherName.text = p['other_name'] as String? ?? '';
         _aiConsent = p['ai_matching_consent'] == true;
         // القديم _language = p['preferred_language'] as String?;
         //الجديد
@@ -583,6 +570,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         condition: _conditions.first,
         conditions: _conditions,
         aiConsent: _aiConsent,
+        otherName: _conditions.contains('Other') ? _otherName.text : null,
         language: _language!,
         description: _about.text,
         document: uploaded,
@@ -658,6 +646,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           ),
                           MultiConditionField(
                             values: _conditions,
+                            otherController: _otherName,
                             enabled: !_busy,
                             onChanged: (v) => setState(() => _conditions = v),
                           ),

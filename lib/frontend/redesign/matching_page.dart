@@ -64,21 +64,19 @@ class _MatchingPageState extends State<MatchingPage> {
           FutureBuilder<Map<String, dynamic>>(
             future: _future,
             builder: (context, s) {
-              if (s.hasError) {
+              if (s.hasError)
                 return EmptyState(
                   'Could not load recommendations',
                   friendlyError(s.error!),
                   retry: _reload,
                 );
-              }
-              if (!s.hasData) {
+              if (!s.hasData)
                 return const Center(
                   child: Padding(
                     padding: EdgeInsets.all(30),
                     child: CircularProgressIndicator(),
                   ),
                 );
-              }
               final data = s.data!;
               final matches = List<Map<String, dynamic>>.from(
                 data['matches'] as List? ?? [],
@@ -96,7 +94,9 @@ class _MatchingPageState extends State<MatchingPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    data['mode'] == 'ai'
+                    data['mode'] == 'general'
+                        ? 'General volunteer suggestions'
+                        : data['mode'] == 'ai'
                         ? 'AI experience comparison active'
                         : 'Condition-based matching',
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -108,15 +108,19 @@ class _MatchingPageState extends State<MatchingPage> {
                     'The percentage shows how many of your conditions are shared. It is not a medical assessment or a probability of successful support.',
                     style: TextStyle(fontSize: 12),
                   ),
-                  if (own.isEmpty)
+                  if (own.isEmpty && data['mode'] != 'general')
                     const EmptyState(
                       'Add your chronic conditions',
                       'Edit your profile to select at least one condition.',
                     ),
-                  if (matches.isEmpty && own.isNotEmpty)
-                    const EmptyState(
-                      'No matching volunteers yet',
-                      'No approved volunteers currently share an active condition with you. You can try again later.',
+                  if (matches.isEmpty)
+                    EmptyState(
+                      data['mode'] == 'general'
+                          ? 'No approved volunteers yet'
+                          : 'No matching volunteers yet',
+                      data['mode'] == 'general'
+                          ? 'Please check again later for general volunteer suggestions.'
+                          : 'No approved volunteers currently share an active condition with you. You can try again later.',
                     ),
                   if (team.isNotEmpty) ...[
                     const SectionTitle('Coverage suggestions'),
@@ -182,14 +186,17 @@ class _MatchingPageState extends State<MatchingPage> {
                                   ),
                                 ),
                                 RoleChip(
-                                  '${row['coverage_percent']}% conditions',
+                                  row['coverage_percent'] == null
+                                      ? 'General suggestion'
+                                      : '${row['coverage_percent']}% conditions',
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              'Shared: ${(row['shared_conditions'] as List).map((c) => c['name']).join(', ')}',
-                            ),
+                            if (row['coverage_percent'] != null)
+                              Text(
+                                'Shared: ${(row['shared_conditions'] as List).map((c) => c['name']).join(', ')}',
+                              ),
                             Text('Language: ${row['language']}'),
                             if (row['experience_similarity'] != null)
                               const Text(

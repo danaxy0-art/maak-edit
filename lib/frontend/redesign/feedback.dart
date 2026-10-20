@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../theme/app_theme.dart';
 
 String friendlyError(Object error) {
@@ -25,11 +27,23 @@ String friendlyError(Object error) {
   }
   if (error is PostgrestException) {
     if (error.code == '23505') {
-      return 'This username or record already exists. Choose another.';
+      return 'This record already exists. For conditions, choose the existing name or link the request to it.';
     }
     if (error.code == '42501') {
       return 'You do not have permission to perform this action.';
     }
+    if (error.message.contains('invalid_other_name'))
+      return 'Enter a condition name of 3–60 characters, without links or numbers only.';
+    if (error.message.contains('condition_already_listed'))
+      return 'This condition is already listed. Select the existing condition.';
+    if (error.message.contains('request_changed'))
+      return 'This request has already changed. Refresh the list.';
+    if (error.message.contains('role_not_allowed'))
+      return 'Your account role does not match this profile. Sign out and log in again.';
+    if (error.message.contains('not_allowed'))
+      return 'Sign in with an account permitted to perform this action.';
+    if (error.message.contains('invalid_conditions'))
+      return 'Select between 1 and 20 conditions.';
     if (error.message.contains('condition_inactive')) {
       return 'This condition is no longer available. Choose an active condition.';
     }

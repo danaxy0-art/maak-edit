@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../backend/services/supabase_service.dart';
 import '../patient/patient_shell.dart';
 import '../volunteer/volunteer_shell.dart';
@@ -29,7 +30,9 @@ class _AuthGateState extends State<AuthGate> {
     final role = await SupabaseService.getMyRole();
     if (role == 'admin') return const AdminDashboardScreen();
     if (role != 'volunteer' && role != 'help_seeker') {
-      return const LoginScreen();
+      throw ArgumentError(
+        'Your account has no valid profile role. Please contact the administrator.',
+      );
     }
     if (!await SupabaseService.hasCompletedProfile(role!)) {
       return RegistrationScreen(role: role, completionOnly: true);

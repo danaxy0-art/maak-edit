@@ -97,7 +97,6 @@ class SupabaseService {
     await client.auth.signOut();
   }
 
-
   /// Permanently deletes the currently authenticated user's account.
   /// Supports both Help Seekers and Volunteers.
   static Future<void> deleteAccount() async {
@@ -116,16 +115,13 @@ class SupabaseService {
 
     // Stop the process if the server could not complete the deletion.
     if (response.status < 200 || response.status >= 300) {
-      throw StateError(
-        'Unable to delete your account. Please try again.',
-      );
+      throw StateError('Unable to delete your account. Please try again.');
     }
 
     // Clear recovery state and remove the local session after success.
     _recoveryUserId = null;
     await client.auth.signOut(scope: SignOutScope.local);
   }
-
 
   static Future<String?> getMyRole() async {
     if (currentUser == null) return null;
@@ -134,7 +130,9 @@ class SupabaseService {
         .select('role')
         .eq('id', userId)
         .maybeSingle();
-    return row?['role'] as String?;
+    if (row != null) return row['role'] as String?;
+    // Repair only the authenticated user's missing base row on the server.
+    return await client.rpc('ensure_maak_profile') as String;
   }
 
   static Future<String> getMyFullName() async {
@@ -161,26 +159,64 @@ class SupabaseService {
   static Future<Map<String, dynamic>> loadProfileForEdit({
     required String role,
   }) async {
+    final actualRole = await getMyRole();
+    if (actualRole != role) {
+      throw ArgumentError(
+        'Your account role has changed. Sign out and log in again.',
+      );
+    }
     final profile = await client
         .from('profiles')
         .select('full_name, username')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
     final volunteer = role == 'volunteer';
     final row = await client
         .from(volunteer ? 'volunteer_profiles' : 'help_seeker_profiles')
         .select()
         .eq('user_id', userId)
         .maybeSingle();
-    final conditions = await client.rpc('my_maak_conditions') as List;
+    final legacy =
+        row?[volunteer ? 'condition_experience' : 'chronic_condition']
+            as String?;
+    List<String> names = [];
+    var setupIncomplete = false;
+    try {
+      final conditions = await client.rpc('my_maak_conditions') as List;
+      names = conditions.map((c) => c['name'] as String).toList();
+    } on PostgrestException catch (e) {
+      if (!{'PGRST202', '42883', '42P01', 'PGRST205'}.contains(e.code)) rethrow;
+      // A missing optional migration must not hide the existing basic profile.
+      setupIncomplete = true;
+    }
+    if (names.isEmpty && legacy != null && legacy.trim().isNotEmpty)
+      names = [legacy];
+    List<Map<String, dynamic>> reviews = [];
+    try {
+      final data = await client
+          .from('condition_review_requests')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(10);
+      reviews = List<Map<String, dynamic>>.from(data);
+    } on PostgrestException catch (e) {
+      if (!{'42P01', 'PGRST205'}.contains(e.code)) rethrow;
+      setupIncomplete = true;
+    }
+    final pending = reviews.where((r) => r['status'] == 'pending').toList();
     return {
-      'conditions': conditions.map((c) => c['name'] as String).toList(),
+      'profile_complete': row != null,
+      'setup_incomplete': setupIncomplete,
+      'condition_reviews': reviews,
+      'other_name': pending.isEmpty ? '' : pending.first['submitted_name'],
+      'conditions': names,
       'ai_matching_consent': row?['ai_matching_consent'] == true,
-      'full_name': profile?['full_name'] ?? '',
-      'username': profile?['username'] ?? '',
+      'full_name':
+          profile['full_name'] ?? currentUser?.userMetadata?['full_name'] ?? '',
+      'username': profile['username'] ?? '',
       'email': currentUser?.email ?? '',
-      'condition':
-          row?[volunteer ? 'condition_experience' : 'chronic_condition'],
+      'condition': legacy,
       'preferred_language': row?['preferred_language'],
       'description': row?['description'],
       'experience': row?['experience_description'],
@@ -204,11 +240,15 @@ class SupabaseService {
     required String condition,
     List<String>? conditions,
     bool aiConsent = false,
+    String? otherName,
     required String language,
     String? description,
     String? document,
     bool reapply = false,
   }) async {
+    final actualRole = await getMyRole();
+    if (actualRole != role)
+      throw ArgumentError('Sign in with the correct account role.');
     // Keep legacy database compatibility without requesting a username.
     final profile = await client
         .from('profiles')
@@ -218,17 +258,18 @@ class SupabaseService {
     final savedUsername =
         username ??
         profile?['username'] as String? ??
-        'user_${userId.replaceAll('-', '').substring(0, 20)}';
+        'user_${userId.replaceAll('-', '').substring(7)}';
     final error = validateUsername(savedUsername);
     if (error != null) throw ArgumentError(error);
     await client.rpc(
-      'save_maak_profile_multi',
+      'save_maak_profile_reviewable',
       params: {
         'p_full_name': fullName.trim(),
         'p_username': savedUsername.trim().toLowerCase(),
         'p_role': role,
         'p_conditions': conditions ?? [condition],
         'p_ai_consent': aiConsent,
+        'p_other_name': otherName,
         'p_language': language,
         'p_description': description?.trim() ?? '',
         'p_document': document,
@@ -236,6 +277,43 @@ class SupabaseService {
       },
     );
     profileRevision.value++;
+  }
+
+  static Future<List<Map<String, dynamic>>> getConditionRequests() async =>
+      List<Map<String, dynamic>>.from(
+        await client.rpc('admin_condition_requests') as List,
+      );
+  static Future<void> reviewConditionRequest(
+    String id,
+    String action, {
+    String? conditionId,
+    String? name,
+    String? reason,
+  }) async {
+    await client.rpc(
+      'review_maak_condition',
+      params: {
+        'p_request_id': id,
+        'p_action': action,
+        'p_condition_id': conditionId,
+        'p_name': name,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  static Future<void> checkConditionName(String id) async {
+    try {
+      final response = await client.functions.invoke(
+        'review-condition-name',
+        body: {'request_id': id},
+      );
+      if (response.status != 200) throw StateError('AI unavailable');
+    } catch (_) {
+      throw ArgumentError(
+        'AI check is unavailable. You can still review this request manually.',
+      );
+    }
   }
 
   static Future<Map<String, dynamic>> getMatches({bool useAi = false}) async {
@@ -281,7 +359,16 @@ class SupabaseService {
     required String name,
     bool active = true,
   }) async {
-    final values = {'name': name.trim(), 'is_active': active};
+    if (await client.rpc('is_maak_admin') != true) {
+      throw ArgumentError(
+        'Only an administrator can add or edit conditions. Sign in with your admin account.',
+      );
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      throw ArgumentError('Enter a condition name of 1–80 characters.');
+    }
+    final values = {'name': trimmed, 'is_active': active};
 
     if (id == null) {
       final saved = await client
