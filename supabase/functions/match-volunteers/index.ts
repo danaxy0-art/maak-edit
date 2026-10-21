@@ -15,7 +15,8 @@ Deno.serve(async(req)=>{
   const input=await req.json().catch(()=>({}));
   // Never accept a seeker ID or profiles from the caller. SQL scopes to auth.uid().
   const {data:context,error}=await client.rpc('maak_matching_context');
-  if(error)return reply({error:error.message.includes('not_allowed')?'help_seeker_only':'matching_setup_or_profile_incomplete'},error.message.includes('not_allowed')?403:409);
+  // account_blocked: an administrator blocked this account (20261021_account_blocking.sql).
+  if(error)return error.message.includes('account_blocked')?reply({error:'account_blocked'},403):reply({error:error.message.includes('not_allowed')?'help_seeker_only':'matching_setup_or_profile_incomplete'},error.message.includes('not_allowed')?403:409);
   const {seeker,candidates}=context;
   if(context.general_mode===true) return reply({...generalSuggestions(seeker,candidates),mode:'general',notice:'General suggestions only. Your submitted condition is not used for matching until approved. No disease score or AI comparison is applied.',seeker_conditions:seeker.conditions,scoring_version:'general-v1'});
   let mode='conditions';let notice='Ranked by shared conditions, then preferred language.';
