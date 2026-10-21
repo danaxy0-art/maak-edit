@@ -29,6 +29,35 @@ void main() {
     );
     expect(validateConfirmation('Dana123!', 'Dana123!'), isNull);
   });
+  test('block reason matches admin_block_account: trimmed, 1-500', () {
+    expect(validateBlockReason(null), 'Enter a reason for blocking this account');
+    expect(validateBlockReason(' \n\t '), 'Enter a reason for blocking this account');
+    expect(validateBlockReason('x'), isNull);
+    expect(validateBlockReason('  ${'a' * 500}  '), isNull);
+    expect(validateBlockReason('a' * 501), 'Use at most 500 characters');
+  });
+  test('reactivation note is optional but limited to 500', () {
+    expect(validateReactivationNote(null), isNull);
+    expect(validateReactivationNote(''), isNull);
+    expect(validateReactivationNote('a' * 500), isNull);
+    expect(validateReactivationNote('a' * 501), 'Use at most 500 characters');
+  });
+  test('appeal explanation matches submit_my_appeal: trimmed, 1-1000', () {
+    const empty = 'Explain why your restriction should be reconsidered';
+    expect(validateAppealMessage(null), empty);
+    expect(validateAppealMessage(' \n\t '), empty);
+    expect(validateAppealMessage('x'), isNull);
+    expect(validateAppealMessage('  ${'a' * 1000}  '), isNull);
+    expect(validateAppealMessage('a' * 1001), 'Use at most 1000 characters');
+  });
+  test('appeal decisions: rejection note required, approval note optional', () {
+    expect(validateRejectionNote('  '), 'Explain why the appeal is rejected');
+    expect(validateRejectionNote('a' * 1000), isNull);
+    expect(validateRejectionNote('a' * 1001), 'Use at most 1000 characters');
+    expect(validateApprovalNote(null), isNull);
+    expect(validateApprovalNote(''), isNull);
+    expect(validateApprovalNote('a' * 1001), 'Use at most 1000 characters');
+  });
   test('rejection reason trims whitespace and enforces length', () {
     expect(validateReason('   '), 'Enter a rejection reason');
     expect(validateReason('a' * 500), isNull);

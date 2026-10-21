@@ -503,6 +503,141 @@ class SupabaseService {
     );
   }
 
+  // Account moderation. Admin RPCs are checked by is_maak_admin() on the server.
+  static Future<List<Map<String, dynamic>>> getAccounts() async =>
+      List<Map<String, dynamic>>.from(
+        await client.rpc('admin_list_accounts') as List,
+      );
+  static Future<List<Map<String, dynamic>>> getBlockedAccounts() async =>
+      List<Map<String, dynamic>>.from(
+        await client.rpc('admin_blocked_accounts') as List,
+      );
+  static Future<List<Map<String, dynamic>>> getModerationHistory(
+    String userId,
+  ) async => List<Map<String, dynamic>>.from(
+    await client.rpc(
+          'admin_account_moderation_history',
+          params: {'p_user_id': userId},
+        )
+        as List,
+  );
+
+  static Future<void> blockAccount({
+    required String userId,
+    required String reason,
+  }) async {
+    final error = validateBlockReason(reason);
+    if (error != null) throw ArgumentError(error);
+    await client.rpc(
+      'admin_block_account',
+      params: {'p_user_id': userId, 'p_reason': reason.trim()},
+    );
+  }
+
+  static Future<void> reactivateAccount({
+    required String userId,
+    String? note,
+  }) async {
+    final error = validateReactivationNote(note);
+    if (error != null) throw ArgumentError(error);
+    final trimmed = note?.trim() ?? '';
+    await client.rpc(
+      'admin_reactivate_account',
+      params: {'p_user_id': userId, 'p_note': trimmed.isEmpty ? null : trimmed},
+    );
+  }
+
+  /// The signed-in user's block, or null when the account is active.
+  /// Also null before the blocking migration is installed: without it the
+  /// database cannot hold a block, so there is nothing to enforce. Any other
+  /// failure is rethrown, so routing never proceeds on an unknown status.
+  static Future<Map<String, dynamic>?> getMyBlockStatus() async {
+    if (currentUser == null) return null;
+    try {
+      final status = Map<String, dynamic>.from(
+        await client.rpc('my_block_status') as Map,
+      );
+      return status['blocked'] == true ? status : null;
+    } on PostgrestException catch (e) {
+      if (!{'PGRST202', '42883'}.contains(e.code)) rethrow;
+      return null;
+    }
+  }
+
+  // Account appeals (20261023). Methods returning null mean the appeals
+  // migration is not installed, so the app hides appeal features.
+  static bool _isMissingFunction(PostgrestException e) =>
+      {'PGRST202', '42883'}.contains(e.code);
+
+  static Future<Map<String, dynamic>?> getMyAppealStatus() async {
+    if (currentUser == null) return null;
+    try {
+      return Map<String, dynamic>.from(
+        await client.rpc('my_appeal_status') as Map,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> submitAppeal(String message) async {
+    final error = validateAppealMessage(message);
+    if (error != null) throw ArgumentError(error);
+    return Map<String, dynamic>.from(
+      await client.rpc(
+            'submit_my_appeal',
+            params: {'p_message': message.trim()},
+          )
+          as Map,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>?> getPendingAppeals() async {
+    try {
+      return List<Map<String, dynamic>>.from(
+        await client.rpc('admin_pending_appeals') as List,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>?> getAccountAppeals(
+    String userId,
+  ) async {
+    try {
+      return List<Map<String, dynamic>>.from(
+        await client.rpc('admin_account_appeals', params: {'p_user_id': userId})
+            as List,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
+  static Future<void> decideAppeal({
+    required String appealId,
+    required bool approve,
+    String? note,
+  }) async {
+    final error = approve
+        ? validateApprovalNote(note)
+        : validateRejectionNote(note);
+    if (error != null) throw ArgumentError(error);
+    final trimmed = note?.trim() ?? '';
+    await client.rpc(
+      'admin_decide_appeal',
+      params: {
+        'p_appeal_id': appealId,
+        'p_approve': approve,
+        'p_note': trimmed.isEmpty ? null : trimmed,
+      },
+    );
+  }
+
   static Future<String> uploadVerificationDocument({
     required List<int> fileBytes,
     required String fileName,

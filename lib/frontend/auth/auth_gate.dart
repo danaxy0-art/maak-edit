@@ -9,6 +9,7 @@ import '../admin/admin_dashboard.dart';
 import '../redesign/registration.dart';
 import '../redesign/ui.dart';
 import '../redesign/feedback.dart';
+import 'blocked_account_screen.dart';
 import 'login_screen.dart';
 
 class AuthGate extends StatefulWidget {
@@ -27,6 +28,15 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<Widget> _destination() async {
     if (SupabaseService.currentUser == null) return const LoginScreen();
+    // Checked before role and profile routing: a blocked account cannot read
+    // its profile details, so it would otherwise look like an unfinished one.
+    final block = await SupabaseService.getMyBlockStatus();
+    if (block != null) {
+      return BlockedAccountScreen(
+        reason: block['reason'] as String? ?? '',
+        blockedAt: block['blocked_at'] as String?,
+      );
+    }
     final role = await SupabaseService.getMyRole();
     if (role == 'admin') return const AdminDashboardScreen();
     if (role != 'volunteer' && role != 'help_seeker') {
