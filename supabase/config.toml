@@ -1,0 +1,10 @@
+[functions.match-volunteers]
+# JWT is verified in index.ts using auth.getUser; supports current signing keys.
+verify_jwt = false
+
+[functions.send-volunteer-email]
+# JWT is verified in index.ts using auth.getUser; admin role via is_maak_admin.
+verify_jwt = false
+
+[functions.review-condition-name]
+verify_jwt = false
