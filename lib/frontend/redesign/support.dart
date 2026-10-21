@@ -38,8 +38,13 @@ class _DataListPageState extends State<DataListPage> {
     _future = widget.load();
   }
 
-  void _reload() {
-    if (mounted) setState(() => _future = widget.load());
+ 
+    void _reload() {
+    if (mounted) {
+      setState(() {
+        _future = widget.load();
+      });
+    }
   }
 
   @override
