@@ -81,3 +81,56 @@ String? validateReason(String? value) {
 
   return null;
 }
+
+/// Same rule as admin_block_account(): non-empty after trimming, at most 500.
+String? validateBlockReason(String? value) {
+  final v = value?.trim() ?? '';
+
+  if (v.isEmpty) {
+    return 'Enter a reason for blocking this account';
+  }
+
+  if (v.length > 500) {
+    return 'Use at most 500 characters';
+  }
+
+  return null;
+}
+
+/// Optional note when reactivating an account; at most 500 characters.
+String? validateReactivationNote(String? value) =>
+    (value?.trim().length ?? 0) > 500 ? 'Use at most 500 characters' : null;
+
+/// Same rule as submit_my_appeal(): non-empty after trimming, at most 1000.
+String? validateAppealMessage(String? value) {
+  final v = value?.trim() ?? '';
+
+  if (v.isEmpty) {
+    return 'Explain why your restriction should be reconsidered';
+  }
+
+  if (v.length > 1000) {
+    return 'Use at most 1000 characters';
+  }
+
+  return null;
+}
+
+/// Rejecting an appeal requires an explanation the member will see (1-1000).
+String? validateRejectionNote(String? value) {
+  final v = value?.trim() ?? '';
+
+  if (v.isEmpty) {
+    return 'Explain why the appeal is rejected';
+  }
+
+  if (v.length > 1000) {
+    return 'Use at most 1000 characters';
+  }
+
+  return null;
+}
+
+/// Optional note when approving an appeal; at most 1000 characters.
+String? validateApprovalNote(String? value) =>
+    (value?.trim().length ?? 0) > 1000 ? 'Use at most 1000 characters' : null;

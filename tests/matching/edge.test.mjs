@@ -19,6 +19,7 @@ function setup({key='secret-test-only',data=context,authError=null,rpcError=null
 test('EDGE-01 unsigned requests never reach profile lookup',async()=>{const s=setup();assert.equal((await s.invoke({},false)).status,401);assert.equal(s.authCalls(),0)});
 test('EDGE-02 invalid session rejected',async()=>{const s=setup({authError:new Error('invalid')});assert.equal((await s.invoke()).status,401)});
 test('EDGE-03 seeker-only SQL permission failure respected',async()=>{const s=setup({rpcError:{message:'not_allowed'}});assert.equal((await s.invoke()).status,403)});
+test('EDGE-03b blocked account gets a specific 403, not setup incomplete',async()=>{const s=setup({rpcError:{message:'account_blocked'}});const r=await s.invoke();assert.equal(r.status,403);assert.equal((await r.json()).error,'account_blocked');assert.equal(s.calls.length,0)});
 test('EDGE-04 AI off causes zero external calls',async()=>{const s=setup();const r=await (await s.invoke()).json();assert.equal(r.mode,'conditions');assert.equal(s.calls.length,0)});
 test('EDGE-05 missing key transparently returns condition recommendations',async()=>{const s=setup({key:null});const r=await (await s.invoke({use_ai:true})).json();assert.equal(r.mode,'conditions');assert.match(r.notice,/not configured/);assert.equal(s.calls.length,0)});
 test('EDGE-06 volunteer opt-out prevents all external requests',async()=>{const s=setup({data:{...context,candidates:context.candidates.map(c=>({...c,ai_consent:false}))}});await s.invoke({use_ai:true});assert.equal(s.calls.length,0)});

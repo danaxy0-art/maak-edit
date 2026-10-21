@@ -12,6 +12,9 @@ import 'profile.dart';
 import 'feedback.dart';
 import 'condition_reviews.dart';
 
+part 'admin_accounts.dart';
+part 'admin_appeals.dart';
+
 // Admin layouts use a wider content area on tablets while preserving
 // Ma'ak's existing theme, bottom navigation, and phone widths.
 class _AdminResponsiveBody extends StatelessWidget {
@@ -49,6 +52,8 @@ class _AdminShellState extends State<AdminShell> {
       ? const ApplicationsPage()
       : index == 2
       ? const ConditionsAdminPage()
+      : index == 3
+      ? const AccountsAdminPage()
       : AdminOverview(select: _select);
   void _select(int index) {
     setState(() => _index = index);
@@ -74,6 +79,7 @@ class _AdminShellState extends State<AdminShell> {
         MaakNavItem(icon: Icons.home_outlined, label: 'Overview'),
         MaakNavItem(icon: Icons.description_outlined, label: 'Applications'),
         MaakNavItem(icon: Icons.favorite_border, label: 'Conditions'),
+        MaakNavItem(icon: Icons.manage_accounts_outlined, label: 'Accounts'),
       ],
     ),
   );
@@ -94,9 +100,42 @@ class _AdminOverviewState extends State<AdminOverview> {
     _load();
   }
 
+  // The most recent successful load. Kept when a pull-to-refresh fails, so
+  // the Admin still sees the previous figures alongside the error.
+  List<List<Map<String, dynamic>>>? _lastLoaded;
+  // At most one overview request at a time: a pull during a load, or a second
+  // pull, waits for the request already running instead of starting another.
+  Future<List<List<Map<String, dynamic>>>>? _inFlight;
+
   // Failed requests stay on the error screen until the Admin retries.
   void _load() {
-    _future = _loadOverview();
+    _lastLoaded = null;
+    _future = _fetchOverview();
+  }
+
+  Future<List<List<Map<String, dynamic>>>> _fetchOverview() =>
+      _inFlight ??= _loadOverview()
+          .then((result) => _lastLoaded = result)
+          .whenComplete(() => _inFlight = null);
+
+  // Pull-to-refresh: reuses the overview load and keeps the scroll position.
+  Future<void> _refresh() async {
+    final hadContent = _lastLoaded != null;
+    try {
+      await _fetchOverview();
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      if (hadContent) {
+        showAppError(context, error, retry: _refresh);
+      } else {
+        // Nothing loaded yet: the error screen shows this latest failure.
+        // ignore() marks it handled here; FutureBuilder still receives it.
+        setState(() {
+          _future = Future.error(error)..ignore();
+        });
+      }
+    }
   }
 
   Future<List<List<Map<String, dynamic>>>> _loadOverview() async {
@@ -137,129 +176,143 @@ class _AdminOverviewState extends State<AdminOverview> {
   Widget build(BuildContext context) => BotanicalScaffold(
     body: SafeArea(
       child: _AdminResponsiveBody(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            LogoHeader(
-              trailing: IconButton(
-                tooltip: 'Log out',
-                onPressed: _confirmLogout,
-                icon: const Icon(Icons.logout),
+        // Same RefreshIndicator and always-scrollable physics as the other
+        // Admin pages, so pulling works even when the content is short.
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            children: [
+              LogoHeader(
+                trailing: IconButton(
+                  tooltip: 'Log out',
+                  onPressed: _confirmLogout,
+                  icon: const Icon(Icons.logout),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Admin overview',
-              style: TextStyle(
-                fontFamily: 'MaakSerif',
-                fontSize: 27,
-                fontWeight: FontWeight.w700,
+              const SizedBox(height: 24),
+              const Text(
+                'Admin overview',
+                style: TextStyle(
+                  fontFamily: 'MaakSerif',
+                  fontSize: 27,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Manage volunteer applications and chronic conditions.',
-              style: TextStyle(color: AppColors.textMuted, height: 1.5),
-            ),
-            const SizedBox(height: 26),
-            FutureBuilder<List<List<Map<String, dynamic>>>>(
-              future: _future,
-              builder: (context, s) {
-                if (s.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (s.hasError) {
-                  return EmptyState(
-                    'Could not load overview',
-                    friendlyError(s.error!),
-                    retry: () => setState(_load),
-                  );
-                }
-                if (!s.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final applications = s.data![0], conditions = s.data![1];
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        _stat(
-                          'Pending applications',
-                          applications
-                              .where((r) => r['status'] == 'pending_review')
-                              .length,
-                          Icons.people_outline,
-                        ),
-                        const SizedBox(width: 14),
-                        _stat(
-                          'Active conditions',
-                          conditions
-                              .where((r) => r['is_active'] == true)
-                              .length,
-                          Icons.favorite,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _menu(
-                      'Volunteer applications',
-                      'Review pending applications',
-                      Icons.description_outlined,
-                      () => widget.select(1),
-                    ),
-                    const SizedBox(height: 14),
-                    _menu(
-                      'Chronic conditions',
-                      'Manage condition types',
-                      Icons.favorite_border,
-                      () => widget.select(2),
-                    ),
-                    const SectionTitle('Latest applications'),
-                    if (applications.isEmpty)
-                      const EmptyState(
-                        'No applications yet',
-                        'New volunteer applications will appear here.',
+              const SizedBox(height: 8),
+              const Text(
+                'Manage volunteer applications and chronic conditions.',
+                style: TextStyle(color: AppColors.textMuted, height: 1.5),
+              ),
+              const SizedBox(height: 26),
+              FutureBuilder<List<List<Map<String, dynamic>>>>(
+                future: _future,
+                builder: (context, s) {
+                  final data = _lastLoaded;
+                  if (data == null) {
+                    if (s.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (s.hasError) {
+                      return EmptyState(
+                        'Could not load overview',
+                        friendlyError(s.error!),
+                        retry: () => setState(_load),
+                      );
+                    }
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final applications = data[0], conditions = data[1];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          _stat(
+                            'Pending applications',
+                            applications
+                                .where((r) => r['status'] == 'pending_review')
+                                .length,
+                            Icons.people_outline,
+                          ),
+                          const SizedBox(width: 14),
+                          _stat(
+                            'Active conditions',
+                            conditions
+                                .where((r) => r['is_active'] == true)
+                                .length,
+                            Icons.favorite,
+                          ),
+                        ],
                       ),
-                    for (final row in applications.take(3))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SurfaceCard(
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ApplicationDetailPage(application: row),
-                              ),
-                            );
-                            if (mounted) setState(_load);
-                          },
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: AppColors.selectedCardFill,
-                                child: Text(initials(_appName(row))),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  _appName(row),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
+                      const SizedBox(height: 24),
+                      _menu(
+                        'Volunteer applications',
+                        'Review pending applications',
+                        Icons.description_outlined,
+                        () => widget.select(1),
+                      ),
+                      const SizedBox(height: 14),
+                      _menu(
+                        'Chronic conditions',
+                        'Manage condition types',
+                        Icons.favorite_border,
+                        () => widget.select(2),
+                      ),
+                      const SizedBox(height: 14),
+                      _menu(
+                        'Manage accounts',
+                        'Block or reactivate accounts',
+                        Icons.manage_accounts_outlined,
+                        () => widget.select(3),
+                      ),
+                      const SectionTitle('Latest applications'),
+                      if (applications.isEmpty)
+                        const EmptyState(
+                          'No applications yet',
+                          'New volunteer applications will appear here.',
+                        ),
+                      for (final row in applications.take(3))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SurfaceCard(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ApplicationDetailPage(application: row),
+                                ),
+                              );
+                              if (mounted) setState(_load);
+                            },
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: AppColors.selectedCardFill,
+                                  child: Text(initials(_appName(row))),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    _appName(row),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              _AdminStatusChip(row['status'] as String?),
-                            ],
+                                _AdminStatusChip(row['status'] as String?),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     ),

@@ -519,6 +519,18 @@ class LogoHeader extends StatelessWidget {
   );
 }
 
+/// Local calendar date such as "20 Oct 2026"; empty when missing or invalid.
+String formatDay(String? value) {
+  final parsed = value == null ? null : DateTime.tryParse(value);
+  if (parsed == null) return '';
+  final d = parsed.toLocal();
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${d.day} ${months[d.month - 1]} ${d.year}';
+}
+
 String initials(String name) => name
     .trim()
     .split(RegExp(r'\s+'))
