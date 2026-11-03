@@ -7,6 +7,7 @@ import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../auth/welcome_screen.dart';
 import '../auth/auth_gate.dart';
+import '../design/tokens.dart';
 import '../theme/app_theme.dart';
 import 'ui.dart';
 import 'multi_condition_field.dart';
@@ -86,7 +87,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   'Permanently delete your account?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'MaakSerif',
+                    fontFamily: 'DMSans',
                     fontSize: 23,
                     fontWeight: FontWeight.bold,
                   ),
@@ -275,11 +276,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 Center(
                   child: CircleAvatar(
                     radius: 48,
-                    backgroundColor: const Color(0xFFCDDEF5),
+                    backgroundColor: MaakColors.blush,
                     child: Text(
                       initials(p['full_name'] as String? ?? ''),
                       style: const TextStyle(
-                        fontFamily: 'MaakSerif',
+                        fontFamily: 'DMSans',
                         fontSize: 30,
                         fontWeight: FontWeight.w700,
                       ),
@@ -387,7 +388,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   label: Text(
                     _deletingAccount ? 'Deleting account...' : 'Delete account',
                   ),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
                 ),
               ],
             );

@@ -596,7 +596,7 @@ class _AccountDetailPageState extends State<AccountDetailPage> {
                         child: Text(
                           _name,
                           style: const TextStyle(
-                            fontFamily: 'MaakSerif',
+                            fontFamily: 'DMSans',
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),

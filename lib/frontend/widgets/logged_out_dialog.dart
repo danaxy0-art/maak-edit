@@ -36,7 +36,7 @@ Future<void> showLoggedOutDialog(
             const Text(
               "You're logged out",
               style: TextStyle(
-                fontFamily: 'MaakSerif',
+                fontFamily: 'DMSans',
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textDark,

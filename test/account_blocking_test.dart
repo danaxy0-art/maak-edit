@@ -14,7 +14,7 @@ import 'package:maak_app/frontend/redesign/admin.dart';
 import 'package:maak_app/frontend/redesign/feedback.dart';
 import 'package:maak_app/frontend/redesign/ui.dart';
 import 'package:maak_app/frontend/theme/app_theme.dart';
-import 'package:maak_app/frontend/widgets/maak_bottom_nav.dart';
+import 'package:maak_app/frontend/design/navigation.dart';
 
 class _PkceStorage extends GotrueAsyncStorage {
   @override
@@ -474,13 +474,15 @@ void main() {
           findsOneWidget,
         );
         // The bottom navigation highlights Accounts, as when its tab is tapped.
-        final navLabel = tester.widget<Text>(
+        // MaakNavBar marks the selected label w600 and the others w500.
+        Text navLabel(String label) => tester.widget<Text>(
           find.descendant(
-            of: find.byType(MaakBottomNav),
-            matching: find.text('Accounts'),
+            of: find.byType(MaakNavBar),
+            matching: find.text(label),
           ),
         );
-        expect(navLabel.style?.fontWeight, FontWeight.w700);
+        expect(navLabel('Accounts').style?.fontWeight, FontWeight.w600);
+        expect(navLabel('Overview').style?.fontWeight, FontWeight.w500);
         expect(tester.takeException(), isNull);
       },
     );

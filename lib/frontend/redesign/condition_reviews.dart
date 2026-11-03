@@ -76,7 +76,7 @@ class _ConditionRequestsPageState extends State<ConditionRequestsPage> {
         children: [
           Text(
             row['submitted_name'] as String,
-            style: const TextStyle(fontFamily: 'MaakSerif', fontSize: 23),
+            style: const TextStyle(fontFamily: 'DMSans', fontSize: 23, fontWeight: FontWeight.w600),
           ),
           Text('Submitted by: ${row['full_name']}'),
           Text('Status: ${row['status']}'),

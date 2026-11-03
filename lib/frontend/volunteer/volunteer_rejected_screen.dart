@@ -33,10 +33,10 @@ class VolunteerRejectedScreen extends StatelessWidget {
         'Not approved',
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontFamily: 'MaakSerif',
+          fontFamily: 'DMSans',
           fontSize: 30,
           fontWeight: FontWeight.w700,
-          color: AppColors.error,
+          color: AppColors.textDark,
         ),
       ),
       const SizedBox(height: 14),

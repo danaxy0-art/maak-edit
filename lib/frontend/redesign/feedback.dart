@@ -4,7 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../theme/app_theme.dart';
+import '../design/components.dart';
+import '../design/tokens.dart';
 
 String friendlyError(Object error) {
   if (error is AuthException) {
@@ -135,21 +136,37 @@ void showAppError(
     retryRequested = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+        icon: const IconBadge(
+          Icons.error_outline,
+          size: 56,
+          color: Color(0xFFFDE8E8),
+        ),
         title: const Text('Please check this'),
         content: Text(
           friendlyError(error),
-          style: const TextStyle(fontSize: 16, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Close'),
+          style: MaakText.body.copyWith(
+            fontSize: 16,
+            height: 1.5,
+            color: MaakColors.ink,
           ),
+        ),
+        actionsOverflowButtonSpacing: MaakSpace.sm,
+        actions: [
           if (retry != null)
-            FilledButton(
+            PillButton(
+              'Close',
+              outlined: true,
+              onPressed: () => Navigator.pop(dialogContext, false),
+            )
+          else
+            PillButton(
+              'Close',
+              onPressed: () => Navigator.pop(dialogContext, false),
+            ),
+          if (retry != null)
+            PillButton(
+              'Try again',
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Try again'),
             ),
         ],
       ),
@@ -163,4 +180,18 @@ void showAppError(
 void showSuccess(BuildContext context, String message) =>
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_outline,
+                color: MaakColors.orbBlush,
+                size: 20,
+              ),
+              const SizedBox(width: MaakSpace.md),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        ),
+      );

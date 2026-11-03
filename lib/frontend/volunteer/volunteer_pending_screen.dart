@@ -26,7 +26,7 @@ class VolunteerPendingScreen extends StatelessWidget {
         'Your application is in review',
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontFamily: 'MaakSerif',
+          fontFamily: 'DMSans',
           fontSize: 26,
           fontWeight: FontWeight.w700,
         ),

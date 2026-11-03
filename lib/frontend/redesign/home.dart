@@ -4,8 +4,10 @@ import 'matching_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../backend/services/supabase_service.dart';
+import '../design/components.dart';
+import '../design/tokens.dart';
 import '../widgets/current_user_name.dart';
-import '../theme/app_theme.dart';
+import '../widgets/maak_logo.dart';
 import 'ui.dart';
 import 'notifications.dart';
 import 'navigation.dart';
@@ -28,7 +30,12 @@ class _HomePageState extends State<HomePage> {
     _load();
   }
 
-  void _load() => _future = Future.wait([SupabaseService.getRequests()]);
+  // A block body on purpose: an arrow body would hand the Future to
+  // setState(_load), which Flutter rejects in debug builds.
+  void _load() {
+    _future = Future.wait([SupabaseService.getRequests()]);
+  }
+
   Future<void> _refresh() async {
     setState(_load);
     await _future;
@@ -40,267 +47,295 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
-  Widget build(BuildContext context) => BotanicalScaffold(
-    body: SafeArea(
-      child: ResponsiveBody(
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: MaakColors.canvasMid,
+    body: BlushCanvas(
+      child: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: _refresh,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              const LogoHeader(trailing: NotificationBell()),
-              const SizedBox(height: 20),
-              Row(
+          color: MaakColors.ink,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= MaakBreakpoints.tablet;
+              final gutter = wide ? MaakSpace.xxl : MaakSpace.lg;
+              return ListView(
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  gutter,
+                  MaakSpace.sm,
+                  gutter,
+                  MaakSpace.xxxl,
+                ),
                 children: [
-                  const Expanded(
-                    child: CurrentUserName(
-                      prefix: 'Hello, ',
-                      style: TextStyle(
-                        fontFamily: 'MaakSerif',
-                        fontSize: 23,
-                        fontWeight: FontWeight.w700,
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: wide
+                            ? MaakBreakpoints.tabletMaxContent
+                            : MaakBreakpoints.phoneMaxContent,
+                      ),
+                      child: FutureBuilder<List<List<Map<String, dynamic>>>>(
+                        future: _future,
+                        builder: (context, s) => wide ? _tablet(s) : _phone(s),
                       ),
                     ),
                   ),
-                  if (volunteer) const RoleChip('Volunteer'),
                 ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                volunteer
-                    ? 'Thank you for being here.'
-                    : 'You’re not alone on this journey.',
-                style: const TextStyle(color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 24),
-              HeroCard(
-                title: volunteer
-                    ? 'Your experience can make a difference.'
-                    : 'Support from someone who understands.',
-                subtitle: volunteer
-                    ? 'Be there for someone who understands.'
-                    : 'Connect with a volunteer who has a similar experience.',
-                button: volunteer ? 'Matching preferences' : 'Find my matches',
-                onTap: () => _push(
-                  volunteer
-                      ? const EditProfilePage(role: 'volunteer')
-                      : const MatchingPage(),
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _phone(AsyncSnapshot<List<List<Map<String, dynamic>>>> s) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _header(),
+      const SizedBox(height: MaakSpace.xl),
+      _greeting(),
+      const SizedBox(height: MaakSpace.xl),
+      _hero(),
+      if (volunteer) ...[const SizedBox(height: MaakSpace.lg), _activity(s)],
+      const SectionHeader('Quick actions'),
+      for (final (i, action) in _actions().indexed) ...[
+        if (i > 0) const SizedBox(height: MaakSpace.sm),
+        action,
+      ],
+      if (!volunteer) ...[
+        const SectionHeader('Recent conversation'),
+        _activity(s),
+      ],
+    ],
+  );
+
+  // Two connected rows: the main action beside the member's activity, then
+  // the shortcuts across the full width so neither column runs short.
+  Widget _tablet(AsyncSnapshot<List<List<Map<String, dynamic>>>> s) {
+    final actions = _actions(stacked: true);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _header(),
+        const SizedBox(height: MaakSpace.xxxl),
+        _greeting(large: true),
+        const SizedBox(height: MaakSpace.xxxl),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 11, child: _hero(large: true)),
+              const SizedBox(width: MaakSpace.xl),
+              Expanded(
+                flex: 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SectionHeader(
+                      volunteer ? 'Your activity' : 'Recent conversation',
+                      top: 0,
+                    ),
+                    Expanded(child: _activity(s)),
+                  ],
                 ),
               ),
-              if (!volunteer) ...[
-                const SectionTitle('Quick actions'),
-                _quickActions(),
-              ],
-              FutureBuilder<List<List<Map<String, dynamic>>>>(
-                future: _future,
-                builder: (context, s) {
-                  if (s.hasError) {
-                    return EmptyState(
-                      'Could not load your activity',
-                      friendlyError(s.error!),
-                      retry: () => setState(_load),
-                    );
-                  }
-                  if (!s.hasData) {
-                    return const Padding(
-                      padding: EdgeInsets.all(22),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final requests = s.data![0];
-                  final pending = requests
-                      .where((r) => r['status'] == 'pending')
-                      .length;
-                  final accepted = requests
-                      .where((r) => r['status'] == 'accepted')
-                      .toList();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (volunteer) ...[
-                        const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _stat(
-                                'Pending requests',
-                                pending,
-                                Icons.people_outline,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _stat(
-                                'Active connections',
-                                accepted.length,
-                                Icons.chat_bubble_outline,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        PrimaryButton(
-                          'View requests',
-                          icon: Icons.arrow_forward,
-                          onPressed: () => _push(const RequestsPage()),
-                        ),
-                        const SectionTitle('Quick actions'),
-                        _quickActions(),
-                      ] else ...[
-                        const SectionTitle('Recent conversation'),
-                        if (accepted.isEmpty)
-                          const SurfaceCard(
-                            child: Text(
-                              'Your conversations will appear here after a volunteer accepts your request.',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                height: 1.4,
-                              ),
-                            ),
-                          )
-                        else
-                          SurfaceCard(
-                            onTap: () => _push(
-                              ConversationPage(
-                                requestId: accepted.first['id'] as String,
-                                name:
-                                    accepted.first['contact_name'] as String? ??
-                                    'Volunteer',
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: AppColors.selectedCardFill,
-                                  child: Text(
-                                    initials(
-                                      accepted.first['contact_name']
-                                              as String? ??
-                                          'Peer',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        accepted.first['contact_name']
-                                                as String? ??
-                                            'Volunteer',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 7),
-                                      Text(
-                                        accepted.first['last_message']
-                                                as String? ??
-                                            'Say hello and start your conversation.',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.chevron_right),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
-      ),
-    ),
-  );
-  Widget _stat(String title, int count, IconData icon) => SurfaceCard(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: AppColors.primaryNavy, size: 22),
-        const SizedBox(height: 8),
-        Text(title, style: const TextStyle(fontSize: 12)),
-        const SizedBox(height: 8),
-        Text(
-          '$count',
-          style: const TextStyle(
-            fontFamily: 'MaakSerif',
-            fontSize: 29,
-            fontWeight: FontWeight.w700,
+        const SectionHeader('Quick actions', top: MaakSpace.xxxl),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (i, action) in actions.indexed) ...[
+                if (i > 0) const SizedBox(width: MaakSpace.md),
+                Expanded(child: action),
+              ],
+            ],
           ),
         ),
       ],
-    ),
+    );
+  }
+
+  Widget _header() => const Row(
+    children: [
+      MaakLogo(iconSize: 24, tint: MaakGradients.coral),
+      Spacer(),
+      RoundIconSurface(child: NotificationBell()),
+    ],
   );
-  Widget _quickActions() => Row(
+
+  Widget _greeting({bool large = false}) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _quick(
-        volunteer ? 'Requests' : 'My journey',
-        volunteer ? 'View and respond' : 'Track your progress',
-        volunteer ? Icons.people_outline : Icons.book_outlined,
-        () => volunteer
-            ? _push(const RequestsPage())
-            : ShellScope.maybeOf(context)?.selectTab(1),
+      Row(
+        children: [
+          Expanded(
+            child: CurrentUserName(
+              prefix: 'Hello, ',
+              style: large
+                  ? MaakText.greeting.copyWith(fontSize: 34)
+                  : MaakText.greeting,
+            ),
+          ),
+          if (volunteer) const SoftChip('Volunteer'),
+        ],
       ),
-      const SizedBox(width: 10),
-      _quick(
-        'Messages',
-        'Your conversations',
-        Icons.chat_bubble_outline,
-        () => ShellScope.maybeOf(context)?.selectTab(2),
-      ),
-      const SizedBox(width: 10),
-      _quick(
-        'Resources',
-        'Helpful information',
-        Icons.description_outlined,
-        () => _push(const ResourcesPage()),
+      const SizedBox(height: MaakSpace.xs),
+      Text(
+        volunteer
+            ? 'Thank you for being here.'
+            : 'You’re not alone on this journey.',
+        style: MaakText.body,
       ),
     ],
   );
-  Widget _quick(
-    String title,
-    String subtitle,
-    IconData icon,
-    VoidCallback onTap,
-  ) => Expanded(
-    child: SurfaceCard(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-      onTap: onTap,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: AppColors.selectedCardFill,
-            child: Icon(icon, size: 21),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-          ),
-        ],
-      ),
+
+  Widget _hero({bool large = false}) => GlowActionCard(
+    large: large,
+    title: volunteer
+        ? 'Your experience can make a difference.'
+        : 'Support from someone who understands.',
+    subtitle: volunteer
+        ? 'Be there for someone who understands.'
+        : 'Connect with a volunteer who has a similar experience.',
+    action: volunteer ? 'Matching preferences' : 'Find my matches',
+    onPressed: () => _push(
+      volunteer
+          ? const EditProfilePage(role: 'volunteer')
+          : const MatchingPage(),
     ),
   );
+
+  List<Widget> _actions({bool stacked = false}) => [
+    if (volunteer)
+      ActionRow(
+        icon: Icons.people_outline,
+        title: 'Requests',
+        subtitle: 'View and respond',
+        stacked: stacked,
+        onTap: () => _push(const RequestsPage()),
+      )
+    else
+      ActionRow(
+        icon: Icons.book_outlined,
+        title: 'My journey',
+        subtitle: 'Track your progress',
+        stacked: stacked,
+        onTap: () => ShellScope.maybeOf(context)?.selectTab(1),
+      ),
+    ActionRow(
+      icon: Icons.chat_bubble_outline,
+      title: 'Messages',
+      subtitle: 'Your conversations',
+      stacked: stacked,
+      onTap: () => ShellScope.maybeOf(context)?.selectTab(2),
+    ),
+    ActionRow(
+      icon: Icons.description_outlined,
+      title: 'Resources',
+      subtitle: 'Helpful information',
+      stacked: stacked,
+      onTap: () => _push(const ResourcesPage()),
+    ),
+  ];
+
+  /// Help seekers: their latest conversation. Volunteers: request counts.
+  Widget _activity(AsyncSnapshot<List<List<Map<String, dynamic>>>> s) {
+    if (s.hasError) {
+      return StateMessage(
+        title: 'Could not load your activity',
+        message: friendlyError(s.error!),
+        icon: Icons.cloud_off_outlined,
+        retry: () => setState(_load),
+      );
+    }
+    if (!s.hasData) {
+      return Semantics(
+        label: 'Loading your activity',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SkeletonBlock(height: volunteer ? 112 : 84),
+            if (volunteer) ...[
+              const SizedBox(height: MaakSpace.md),
+              const SkeletonBlock(height: 48),
+            ],
+          ],
+        ),
+      );
+    }
+    final requests = s.data![0];
+    final pending = requests.where((r) => r['status'] == 'pending').length;
+    final accepted = requests.where((r) => r['status'] == 'accepted').toList();
+    if (volunteer) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _stats(pending, accepted.length),
+          const SizedBox(height: MaakSpace.md),
+          PillButton(
+            'View requests',
+            icon: Icons.arrow_forward,
+            outlined: true,
+            expand: true,
+            onPressed: () => _push(const RequestsPage()),
+          ),
+        ],
+      );
+    }
+    if (accepted.isEmpty) {
+      return const StateMessage(
+        message:
+            'Your conversations will appear here after a volunteer accepts your request.',
+        icon: Icons.chat_bubble_outline,
+      );
+    }
+    final first = accepted.first;
+    final name = first['contact_name'] as String? ?? 'Volunteer';
+    return PersonPreviewCard(
+      initials: initials(first['contact_name'] as String? ?? 'Peer'),
+      name: name,
+      message:
+          first['last_message'] as String? ??
+          'Say hello and start your conversation.',
+      onTap: () =>
+          _push(ConversationPage(requestId: first['id'] as String, name: name)),
+    );
+  }
+
+  Widget _stats(int pending, int active) {
+    const gap = SizedBox(width: MaakSpace.sm, height: MaakSpace.sm);
+    final tiles = [
+      StatTile(
+        label: 'Pending requests',
+        value: pending,
+        icon: Icons.people_outline,
+      ),
+      StatTile(
+        label: 'Active connections',
+        value: active,
+        icon: Icons.chat_bubble_outline,
+      ),
+    ];
+    // Side by side the labels get cramped once text is enlarged.
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [tiles[0], gap, tiles[1]],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: tiles[0]),
+          gap,
+          Expanded(child: tiles[1]),
+        ],
+      ),
+    );
+  }
 }

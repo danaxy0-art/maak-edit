@@ -95,7 +95,7 @@ class _VerifyResetOtpScreenState extends State<VerifyResetOtpScreen> {
       children: [
         const Text(
           'Verify your email',
-          style: TextStyle(fontFamily: 'MaakSerif', fontSize: 27),
+          style: TextStyle(fontFamily: 'DMSans', fontSize: 27, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         Text(
