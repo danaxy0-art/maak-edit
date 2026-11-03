@@ -516,7 +516,7 @@ class _AppealDetailPageState extends State<AppealDetailPage> {
                             Text(
                               _name,
                               style: const TextStyle(
-                                fontFamily: 'MaakSerif',
+                                fontFamily: 'DMSans',
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
                               ),

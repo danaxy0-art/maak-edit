@@ -17,7 +17,7 @@ class ChooseRoleScreen extends StatelessWidget {
         'How can we be with you?',
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontFamily: 'MaakSerif',
+          fontFamily: 'DMSans',
           fontSize: 27,
           fontWeight: FontWeight.w700,
         ),
@@ -65,7 +65,7 @@ class ChooseRoleScreen extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            fontFamily: 'MaakSerif',
+            fontFamily: 'DMSans',
             fontSize: 20,
             fontWeight: FontWeight.w700,
           ),

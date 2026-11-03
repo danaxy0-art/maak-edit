@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../theme/app_theme.dart';
+import '../design/components.dart';
+import '../design/navigation.dart';
 import '../widgets/maak_bottom_nav.dart';
 import 'ui.dart';
 import 'app_text_field.dart';
@@ -72,7 +74,7 @@ class _AdminShellState extends State<AdminShell> {
         onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _page(0)),
       ),
     ),
-    bottomNavigationBar: MaakBottomNav(
+    bottomNavigationBar: MaakNavBar(
       currentIndex: _index,
       onTap: _select,
       items: const [
@@ -176,7 +178,7 @@ class _AdminOverviewState extends State<AdminOverview> {
               const Text(
                 'Admin overview',
                 style: TextStyle(
-                  fontFamily: 'MaakSerif',
+                  fontFamily: 'DMSans',
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
                 ),
@@ -299,23 +301,19 @@ class _AdminOverviewState extends State<AdminOverview> {
     ),
   );
   Widget _stat(String text, int count, IconData icon) => Expanded(
-    child: Container(
+    child: SoftCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.selectedCardFill,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: AppColors.primaryNavy),
+          IconBadge(icon, size: 40),
           const SizedBox(height: 12),
           Text(text, style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 9),
           Text(
             '$count',
             style: const TextStyle(
-              fontFamily: 'MaakSerif',
+              fontFamily: 'DMSans',
               fontSize: 30,
               fontWeight: FontWeight.w700,
             ),
@@ -1077,7 +1075,7 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
                   child: Text(
                     _appName(a),
                     style: const TextStyle(
-                      fontFamily: 'MaakSerif',
+                      fontFamily: 'DMSans',
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),

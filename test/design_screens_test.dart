@@ -48,6 +48,17 @@ void main() {
         ),
       );
     await serif.load();
+    final sans = FontLoader('DMSans');
+    for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
+      sans.addFont(
+        Future.value(
+          ByteData.sublistView(
+            File('assets/fonts/DMSans-$weight.ttf').readAsBytesSync(),
+          ),
+        ),
+      );
+    }
+    await sans.load();
     final icons = FontLoader('MaterialIcons')
       ..addFont(
         Future.value(

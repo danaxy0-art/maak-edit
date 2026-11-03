@@ -60,7 +60,7 @@ class _MultiConditionFieldState extends State<MultiConditionField> {
                 children: [
                   const Text(
                     'Select your conditions',
-                    style: TextStyle(fontFamily: 'MaakSerif', fontSize: 24),
+                    style: TextStyle(fontFamily: 'DMSans', fontSize: 24, fontWeight: FontWeight.w600),
                   ),
                   const Text('Choose all that apply (up to 20).'),
                   TextField(

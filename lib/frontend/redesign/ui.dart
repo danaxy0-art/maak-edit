@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import '../design/components.dart';
+import '../design/tokens.dart';
 import '../theme/app_theme.dart';
 import '../widgets/maak_logo.dart';
+
+// Shared building blocks of the original screens. Their names and parameters
+// are kept so every screen keeps its structure; their appearance follows the
+// redesign tokens (blush canvas, white hairline cards, dark pill buttons).
 
 class ResponsiveBody extends StatelessWidget {
   final Widget child;
@@ -9,13 +15,16 @@ class ResponsiveBody extends StatelessWidget {
   Widget build(BuildContext context) => Align(
     alignment: Alignment.topCenter,
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 520),
+      constraints: const BoxConstraints(
+        maxWidth: MaakBreakpoints.phoneMaxContent,
+      ),
       child: child,
     ),
   );
 }
 
-/// Every route uses the same image-backed, botanical design language.
+/// Every route shares the blush-to-white canvas. The name is kept from the
+/// earlier botanical design so existing screens need no change.
 class BotanicalScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? body, bottomNavigationBar;
@@ -25,31 +34,28 @@ class BotanicalScaffold extends StatelessWidget {
     this.body,
     this.bottomNavigationBar,
   });
+  // The canvas sits behind the whole Scaffold, so a transparent app bar
+  // shares one continuous gradient with the body instead of a flat band.
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: appBar,
-    bottomNavigationBar: bottomNavigationBar,
-    body: Stack(
-      fit: StackFit.expand,
-      children: [
-        const Positioned.fill(child: BotanicalBackdrop(subtle: true)),
-        if (body != null) body!,
-      ],
+  Widget build(BuildContext context) => BlushCanvas(
+    child: Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: appBar,
+      bottomNavigationBar: bottomNavigationBar,
+      body: body,
     ),
   );
 }
 
+/// Decorative page background: the blush canvas gradient.
 class BotanicalBackdrop extends StatelessWidget {
   final bool subtle;
   const BotanicalBackdrop({super.key, this.subtle = false});
   @override
-  Widget build(BuildContext context) => IgnorePointer(
+  Widget build(BuildContext context) => const IgnorePointer(
     child: ExcludeSemantics(
-      child: Image.asset(
-        'assets/images/botanical_background.png',
-        fit: BoxFit.cover,
-        alignment: Alignment.bottomCenter,
-        opacity: AlwaysStoppedAnimation(subtle ? .17 : 1),
+      child: DecoratedBox(
+        decoration: BoxDecoration(gradient: MaakGradients.canvas),
       ),
     ),
   );
@@ -68,83 +74,50 @@ class BotanicalHeader extends StatelessWidget {
     this.back = true,
     this.height = 290,
   });
+  // A minimum rather than a fixed height: the header grows with its content
+  // (long titles, large text) instead of overflowing.
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: height * (MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.8)),
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset('assets/images/botanical_background.png', fit: BoxFit.fill),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.background,
-                Color(0xCCF7F3EA),
-                Color(0x00F7F3EA),
-              ],
-              stops: [0, .45, 1],
-            ),
-          ),
-        ),
-        if (progress != null)
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color(0xB3F7F3EA), Color(0x00F7F3EA)],
-              ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      minHeight:
+          height * (MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.8)),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 30,
-                    child: back && Navigator.canPop(context)
-                        ? IconButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: () => Navigator.maybePop(context),
-                            icon: const Icon(Icons.arrow_back, size: 23),
-                          )
-                        : null,
-                  ),
-                  const Expanded(child: MaakLogo(iconSize: 29)),
-                  const SizedBox(width: 30),
-                ],
+              SizedBox(
+                width: 48,
+                child: back && Navigator.canPop(context)
+                    ? const RoundIconSurface(child: BackButton())
+                    : null,
               ),
-              if (progress != null) ...[const SizedBox(height: 16), progress!],
-              const SizedBox(height: 25),
-              Text(
-                title,
-                textAlign: progress == null ? TextAlign.center : TextAlign.left,
-                style: const TextStyle(
-                  fontFamily: 'MaakSerif',
-                  fontSize: 32,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                subtitle,
-                textAlign: progress == null ? TextAlign.center : TextAlign.left,
-                style: const TextStyle(
-                  color: AppColors.primaryNavy,
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
+              const Expanded(child: MaakLogo(iconSize: 29)),
+              const SizedBox(width: 48),
             ],
           ),
-        ),
-      ],
+          if (progress != null) ...[const SizedBox(height: 16), progress!],
+          const SizedBox(height: 25),
+          Semantics(
+            header: true,
+            child: Text(
+              title,
+              textAlign: progress == null ? TextAlign.center : TextAlign.start,
+              style: MaakText.greeting.copyWith(fontSize: 32, height: 1.1),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            textAlign: progress == null ? TextAlign.center : TextAlign.start,
+            style: MaakText.body.copyWith(color: MaakColors.onHero),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -156,15 +129,15 @@ class FormSheet extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFFDFA),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-      border: Border.all(color: const Color(0xFFE8E1D5)),
-      boxShadow: const [
+    decoration: const BoxDecoration(
+      color: MaakColors.surface,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      border: Border.fromBorderSide(BorderSide(color: MaakColors.border)),
+      boxShadow: [
         BoxShadow(
-          color: Color(0x142C4A66),
+          color: Color(0x14AA6464),
           blurRadius: 20,
-          offset: Offset(0, -5),
+          offset: Offset(0, -4),
         ),
       ],
     ),
@@ -180,12 +153,12 @@ class PrivacyNote extends StatelessWidget {
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.verified_user, size: 19, color: AppColors.primaryNavy),
+        Icon(Icons.verified_user_outlined, size: 19, color: MaakColors.icon),
         SizedBox(width: 8),
         Flexible(
           child: Text(
             'Your information stays private.',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+            style: MaakText.caption,
           ),
         ),
       ],
@@ -219,37 +192,67 @@ class AuthCanvas extends StatelessWidget {
       content.removeAt(0);
     }
     return BotanicalScaffold(
-      body: SafeArea(
-        child: ResponsiveBody(
-          child: SingleChildScrollView(
-            key: ValueKey(heroTitle),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                BotanicalHeader(
-                  title: heroTitle,
-                  subtitle: heroSubtitle,
-                  back: back,
-                  progress: progress,
-                  height: heroHeight,
-                ),
-                Transform.translate(
-                  offset: const Offset(0, -18),
-                  child: FormSheet(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: content,
-                    ),
+      body: Stack(
+        children: [
+          // The one restrained glow, spanning the full width behind the
+          // centred column so tablets show no hard edge.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: heroHeight * 1.4,
+            child: const ExcludeSemantics(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: AlignmentDirectional.topEnd,
+                    radius: 1.2,
+                    colors: [
+                      MaakColors.orbPink,
+                      MaakColors.orbBlush,
+                      Color(0x00FEF8F8),
+                    ],
+                    stops: [0, .4, 1],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          _body(content),
+        ],
       ),
     );
   }
+
+  Widget _body(List<Widget> content) => SafeArea(
+    child: ResponsiveBody(
+      child: SingleChildScrollView(
+        key: ValueKey(heroTitle),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BotanicalHeader(
+              title: heroTitle,
+              subtitle: heroSubtitle,
+              back: back,
+              progress: progress,
+              height: heroHeight,
+            ),
+            Transform.translate(
+              offset: const Offset(0, -18),
+              child: FormSheet(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: content,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class FieldLabel extends StatelessWidget {
@@ -270,7 +273,11 @@ class FieldLabel extends StatelessWidget {
             ),
         ],
       ),
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: MaakColors.ink,
+      ),
     ),
   );
 }
@@ -288,45 +295,27 @@ class PrimaryButton extends StatelessWidget {
     this.icon,
   });
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
-      gradient: LinearGradient(
-        colors: onPressed == null || busy
-            ? [
-                AppColors.primaryNavy.withValues(alpha: .45),
-                AppColors.primaryNavy.withValues(alpha: .45),
-              ]
-            : const [Color(0xFF295677), Color(0xFF163953)],
-      ),
-    ),
-    child: ElevatedButton(
-      onPressed: busy ? null : onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.transparent,
-        disabledBackgroundColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
-      child: busy
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(child: Text(label, textAlign: TextAlign.center)),
-                if (icon != null) ...[
-                  const SizedBox(width: 14),
-                  Icon(icon, size: 20),
-                ],
-              ],
+  Widget build(BuildContext context) => ElevatedButton(
+    onPressed: busy ? null : onPressed,
+    child: busy
+        ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: MaakColors.muted,
             ),
-    ),
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(child: Text(label, textAlign: TextAlign.center)),
+              if (icon != null) ...[
+                const SizedBox(width: 12),
+                Icon(icon, size: 20),
+              ],
+            ],
+          ),
   );
 }
 
@@ -341,29 +330,8 @@ class SurfaceCard extends StatelessWidget {
     this.onTap,
   });
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFFDFA),
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: AppColors.fieldBorder.withValues(alpha: .65)),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.primaryNavy.withValues(alpha: .035),
-          blurRadius: 18,
-          offset: const Offset(0, 5),
-        ),
-      ],
-    ),
-    child: Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(padding: padding, child: child),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      SoftCard(onTap: onTap, padding: padding, child: child);
 }
 
 class LandscapeHills extends StatelessWidget {
@@ -385,49 +353,26 @@ class HeroCard extends StatelessWidget {
     this.onTap,
   });
   @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(20),
-    child: Container(
-      color: const Color(0xFFDCE8F5),
-      child: Stack(
-        children: [
-          const Positioned.fill(child: BotanicalBackdrop()),
-          const Positioned.fill(child: ColoredBox(color: Color(0xBBF7F3EA))),
-          Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 260),
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'MaakSerif',
-                      fontSize: 28,
-                      height: 1.12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 14, height: 1.45),
-                ),
-                if (button != null) ...[
-                  const SizedBox(height: 20),
-                  PrimaryButton(
-                    button!,
-                    onPressed: onTap,
-                    icon: Icons.arrow_forward,
-                  ),
-                ],
-              ],
-            ),
-          ),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: MaakGradients.orb,
+      borderRadius: BorderRadius.circular(MaakRadius.hero),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: Text(title, style: MaakText.cardTitle.copyWith(fontSize: 24)),
+        ),
+        const SizedBox(height: 12),
+        Text(subtitle, style: MaakText.body.copyWith(color: MaakColors.onHero)),
+        if (button != null) ...[
+          const SizedBox(height: 20),
+          PillButton(button!, onPressed: onTap, icon: Icons.arrow_forward),
         ],
-      ),
+      ],
     ),
   );
 }
@@ -438,17 +383,16 @@ class RoleChip extends StatelessWidget {
   const RoleChip(this.label, {super.key, this.error = false});
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-      color: error ? const Color(0xFFFFEBEB) : AppColors.selectedCardFill,
-      borderRadius: BorderRadius.circular(24),
+      color: error ? const Color(0xFFFDE8E8) : MaakColors.selected,
+      borderRadius: BorderRadius.circular(MaakRadius.pill),
     ),
     child: Text(
       label,
-      style: TextStyle(
-        fontSize: 12,
+      style: MaakText.caption.copyWith(
         fontWeight: FontWeight.w600,
-        color: error ? AppColors.error : AppColors.primaryNavy,
+        color: error ? const Color(0xFFB0222A) : MaakColors.ink,
       ),
     ),
   );
@@ -460,10 +404,7 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 22, bottom: 12),
-    child: Text(
-      text,
-      style: const TextStyle(fontFamily: 'MaakSerif', fontSize: 21),
-    ),
+    child: Semantics(header: true, child: Text(text, style: MaakText.section)),
   );
 }
 
@@ -484,22 +425,18 @@ class EmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 44, color: AppColors.selectedCardBorder),
+        IconBadge(icon, size: 64),
         const SizedBox(height: 16),
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: MaakText.itemTitle.copyWith(fontSize: 17),
         ),
         const SizedBox(height: 8),
-        Text(
-          subtitle,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textMuted),
-        ),
+        Text(subtitle, textAlign: TextAlign.center, style: MaakText.body),
         if (retry != null) ...[
           const SizedBox(height: 18),
-          OutlinedButton(onPressed: retry, child: const Text('Try again')),
+          PillButton('Try again', outlined: true, onPressed: retry),
         ],
       ],
     ),
@@ -559,7 +496,7 @@ class RegistrationProgress extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 14,
-              backgroundColor: AppColors.primaryNavy,
+              backgroundColor: MaakColors.button,
               child: step == 1
                   ? const Icon(Icons.check, color: Colors.white, size: 17)
                   : const Text(
@@ -574,21 +511,21 @@ class RegistrationProgress extends StatelessWidget {
       ),
       Container(
         width: 84,
-        height: 1,
+        height: 1.5,
         margin: const EdgeInsets.only(bottom: 20),
-        color: AppColors.selectedCardBorder,
+        color: step == 1 ? MaakColors.button : MaakColors.border,
       ),
       Column(
         children: [
           CircleAvatar(
             radius: 14,
             backgroundColor: step == 1
-                ? AppColors.primaryNavy
-                : AppColors.selectedCardFill,
+                ? MaakColors.button
+                : MaakColors.selected,
             child: Text(
               '2',
               style: TextStyle(
-                color: step == 1 ? Colors.white : AppColors.textMuted,
+                color: step == 1 ? Colors.white : MaakColors.ink,
                 fontSize: 12,
               ),
             ),

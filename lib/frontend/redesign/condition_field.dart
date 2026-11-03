@@ -47,7 +47,7 @@ class _ConditionFieldState extends State<ConditionField> {
                   const Text(
                     'Select your chronic condition',
                     style: TextStyle(
-                      fontFamily: 'MaakSerif',
+                      fontFamily: 'DMSans',
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),

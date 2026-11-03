@@ -313,9 +313,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ? 'Share your experience'
               : 'Your support preferences',
           style: const TextStyle(
-            fontFamily: 'MaakSerif',
+            fontFamily: 'DMSans',
             fontSize: 25,
             height: 1.1,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 8),
@@ -575,7 +576,7 @@ class _VerifySignupScreenState extends State<VerifySignupScreen> {
         'Verify your email',
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontFamily: 'MaakSerif',
+          fontFamily: 'DMSans',
           fontSize: 26,
           fontWeight: FontWeight.w700,
         ),

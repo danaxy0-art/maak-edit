@@ -3,6 +3,7 @@ import 'ui.dart';
 
 import 'package:flutter/material.dart';
 
+import '../design/navigation.dart';
 import '../widgets/maak_bottom_nav.dart';
 import 'navigation.dart';
 import 'home.dart';
@@ -49,7 +50,7 @@ class _AppShellState extends State<AppShell> {
       ),
       bottomNavigationBar: StreamBuilder<int>(
         stream: _unread,
-        builder: (context, snapshot) => MaakBottomNav(
+        builder: (context, snapshot) => MaakNavBar(
           currentIndex: _index,
           onTap: _select,
           items: [

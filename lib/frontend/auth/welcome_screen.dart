@@ -19,7 +19,7 @@ class WelcomeScreen extends StatelessWidget {
       const Text(
         'Welcome to Ma’ak',
         textAlign: TextAlign.center,
-        style: TextStyle(fontFamily: 'MaakSerif', fontSize: 29),
+        style: TextStyle(fontFamily: 'DMSans', fontSize: 29, fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 12),
       const Text(

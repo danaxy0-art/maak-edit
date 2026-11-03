@@ -1,50 +1,72 @@
 import 'package:flutter/material.dart';
 
+import '../design/tokens.dart';
+
+// The names below predate the redesign and are used across every screen, so
+// they are kept and pointed at the approved Ma'ak palette instead of renamed:
+// "navy" is now the near-black ink and button colour, the cream background is
+// the warm blush canvas, and the blue selection tints are blush.
 class AppColors {
-  static const primaryNavy = Color(0xFF204867);
-  static const primaryNavyDark = Color(0xFF102E4D);
-  static const background = Color(0xFFF7F3EA);
+  static const primaryNavy = MaakColors.button;
+  static const primaryNavyDark = MaakColors.ink;
+  static const background = MaakColors.canvasMid;
   static const fieldFill = Colors.white;
-  static const fieldBorder = Color(0xFFD5DEE5);
-  static const textDark = Color(0xFF102E4D);
-  static const textMuted = Color(0xFF60738A);
-  static const selectedCardBorder = Color(0xFF6E93B5);
-  static const selectedCardFill = Color(0xFFE9F0F8);
-  static const divider = Color(0xFFE5E7EB);
-  static const error = Color(0xFFD92D36);
-  static const success = Color(0xFF22854D);
+  static const fieldBorder = Color(0xFFE6D6D6);
+  static const textDark = MaakColors.ink;
+  static const textMuted = MaakColors.muted;
+  static const selectedCardBorder = MaakColors.coral;
+  static const selectedCardFill = MaakColors.blush;
+  static const divider = MaakColors.border;
+  static const error = MaakColors.error;
+  static const success = MaakColors.success;
 }
 
 class AppTheme {
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primaryNavy,
-      primary: AppColors.primaryNavy,
-      surface: AppColors.background,
-      error: AppColors.error,
+      seedColor: MaakColors.coral,
+      primary: MaakColors.button,
+      onPrimary: Colors.white,
+      secondary: MaakColors.coral,
+      secondaryContainer: MaakColors.selected,
+      onSecondaryContainer: MaakColors.ink,
+      primaryContainer: MaakColors.selected,
+      onPrimaryContainer: MaakColors.ink,
+      surface: MaakColors.surface,
+      onSurface: MaakColors.ink,
+      onSurfaceVariant: MaakColors.muted,
+      surfaceContainerHighest: MaakColors.fill,
+      outline: AppColors.fieldBorder,
+      outlineVariant: MaakColors.border,
+      error: MaakColors.error,
       brightness: Brightness.light,
     );
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    const pill = StadiumBorder();
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      fontFamily: MaakText.family,
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: MaakColors.canvasMid,
       textTheme: ThemeData.light().textTheme.apply(
-        bodyColor: AppColors.textDark,
-        displayColor: AppColors.textDark,
+        fontFamily: MaakText.family,
+        bodyColor: MaakColors.ink,
+        displayColor: MaakColors.ink,
       ),
+      iconTheme: const IconThemeData(color: MaakColors.icon),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textDark,
+        scrolledUnderElevation: 0,
+        foregroundColor: MaakColors.ink,
+        iconTheme: IconThemeData(color: MaakColors.icon),
         centerTitle: false,
-        titleTextStyle: TextStyle(
-          fontFamily: 'MaakSerif',
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textDark,
-        ),
+        titleTextStyle: MaakText.pageTitle,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -54,89 +76,156 @@ class AppTheme {
           horizontal: 16,
           vertical: 15,
         ),
-        hintStyle: const TextStyle(fontSize: 14, color: AppColors.textMuted),
+        hintStyle: MaakText.body,
+        labelStyle: MaakText.body,
         errorMaxLines: 3,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.fieldBorder),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.selectedCardBorder,
-            width: 1.5,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-        ),
+        border: border(AppColors.fieldBorder),
+        enabledBorder: border(AppColors.fieldBorder),
+        disabledBorder: border(MaakColors.border),
+        focusedBorder: border(MaakColors.button, 1.5),
+        errorBorder: border(MaakColors.error),
+        focusedErrorBorder: border(MaakColors.error, 1.5),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryNavy,
+          backgroundColor: MaakColors.button,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: MaakColors.fill,
+          disabledForegroundColor: MaakColors.muted,
           minimumSize: const Size(double.infinity, 52),
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          textStyle: const TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          shape: pill,
+          textStyle: MaakText.button.copyWith(fontSize: 16),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(100, 50),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          backgroundColor: MaakColors.button,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: MaakColors.fill,
+          disabledForegroundColor: MaakColors.muted,
+          minimumSize: const Size(100, 48),
+          shape: pill,
+          textStyle: MaakText.button,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryNavy,
-          minimumSize: const Size(100, 50),
-          side: const BorderSide(color: AppColors.primaryNavy),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          foregroundColor: MaakColors.ink,
+          backgroundColor: MaakColors.surface,
+          minimumSize: const Size(100, 48),
+          side: const BorderSide(color: MaakColors.button, width: 1.5),
+          shape: pill,
+          textStyle: MaakText.button,
         ),
       ),
       cardTheme: const CardThemeData(
-        color: Color(0xFFFFFDFA),
+        color: MaakColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(18)),
+          borderRadius: BorderRadius.all(Radius.circular(MaakRadius.card)),
+          side: BorderSide(color: MaakColors.border),
         ),
       ),
-      dialogTheme: const DialogThemeData(
-        backgroundColor: Color(0xFFFFFDFA),
-        titleTextStyle: TextStyle(
-          fontFamily: 'MaakSerif',
-          fontSize: 25,
-          color: AppColors.textDark,
-        ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: MaakColors.surface,
+        titleTextStyle: MaakText.cardTitle,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(18)),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(22)),
         ),
       ),
-      snackBarTheme: const SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.primaryNavy,
-        contentTextStyle: TextStyle(color: Colors.white),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: MaakColors.warmWhite,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: MaakColors.border,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.divider),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: MaakColors.button,
+        contentTextStyle: MaakText.body.copyWith(color: Colors.white),
+        actionTextColor: MaakColors.orbBlush,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: MaakColors.fill,
+        selectedColor: MaakColors.selected,
+        checkmarkColor: MaakColors.ink,
+        side: const BorderSide(color: MaakColors.border),
+        labelStyle: MaakText.caption.copyWith(color: MaakColors.ink),
+        shape: pill,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? Colors.white : null,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? MaakColors.button : null,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? MaakColors.button : null,
+        ),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      ),
+      radioTheme: const RadioThemeData(
+        fillColor: WidgetStatePropertyAll(MaakColors.button),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: MaakColors.ink,
+        unselectedLabelColor: MaakColors.muted,
+        indicatorColor: MaakColors.button,
+        dividerColor: MaakColors.border,
+        labelStyle: MaakText.button.copyWith(fontSize: 14),
+        unselectedLabelStyle: MaakText.button.copyWith(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? MaakColors.selected
+                : MaakColors.surface,
+          ),
+          foregroundColor: const WidgetStatePropertyAll(MaakColors.ink),
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: AppColors.fieldBorder),
+          ),
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: MaakColors.ink,
+        linearTrackColor: MaakColors.fill,
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: MaakColors.icon,
+        textColor: MaakColors.ink,
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: MaakColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dropdownMenuTheme: const DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(MaakColors.surface),
+          surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        ),
+      ),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: MaakColors.ink,
+        selectionColor: MaakColors.selected,
+        selectionHandleColor: MaakColors.coral,
+      ),
+      dividerTheme: const DividerThemeData(color: MaakColors.border),
     );
   }
 }

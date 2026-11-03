@@ -57,7 +57,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         'Reset your password',
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontFamily: 'MaakSerif',
+          fontFamily: 'DMSans',
           fontSize: 27,
           fontWeight: FontWeight.w700,
         ),

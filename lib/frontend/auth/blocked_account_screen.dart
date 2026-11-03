@@ -97,10 +97,10 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
           'Your account has been restricted',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'MaakSerif',
+            fontFamily: 'DMSans',
             fontSize: 26,
             fontWeight: FontWeight.w700,
-            color: AppColors.error,
+            color: AppColors.textDark,
           ),
         ),
         const SizedBox(height: 10),

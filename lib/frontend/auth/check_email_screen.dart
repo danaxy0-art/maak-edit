@@ -50,7 +50,7 @@ class CheckEmailScreen extends StatelessWidget {
               const Text(
                 'Check your email',
                 style: TextStyle(
-                  fontFamily: 'MaakSerif',
+                  fontFamily: 'DMSans',
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textDark,

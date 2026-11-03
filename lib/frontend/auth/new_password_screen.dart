@@ -63,7 +63,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
       children: [
         const Text(
           'Reset your password',
-          style: TextStyle(fontFamily: 'MaakSerif', fontSize: 27),
+          style: TextStyle(fontFamily: 'DMSans', fontSize: 27, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 14),
         Form(

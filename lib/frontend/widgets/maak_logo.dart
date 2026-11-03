@@ -1,19 +1,35 @@
 import 'package:flutter/material.dart';
 
+import '../design/tokens.dart';
+
 /// The "Ma'ak" wordmark + icon shown at the top of the auth/onboarding
 /// screens, using the real logo asset at assets/images/logo.png.
 class MaakLogo extends StatelessWidget {
   final double iconSize;
-  const MaakLogo({super.key, this.iconSize = 40});
+
+  /// Repaints the single-colour logo with this gradient, keeping its exact
+  /// shape. Defaults to the approved coral; null keeps the original blue.
+  final Gradient? tint;
+  const MaakLogo({
+    super.key,
+    this.iconSize = 40,
+    this.tint = MaakGradients.coral,
+  });
 
   @override
   Widget build(BuildContext context) {
     // The logo image already contains the wordmark, so it's shown on its
     // own without extra text underneath.
-    return Image.asset(
+    final logo = Image.asset(
       'assets/images/logo.png',
       height: iconSize * 1.6,
       fit: BoxFit.contain,
+    );
+    if (tint == null) return logo;
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: tint!.createShader,
+      child: logo,
     );
   }
 }
