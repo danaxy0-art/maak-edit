@@ -1,0 +1,10 @@
+# Working files written by run_tests.sh
+.results.txt
+.v2.txt
+.old.txt
+.step.err
+.s0
+.s_rb
+.s_clean
+.cleanup23.sql
+.cleanup21.sql

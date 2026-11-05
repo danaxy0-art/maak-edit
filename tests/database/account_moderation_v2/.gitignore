@@ -1,0 +1,11 @@
+# Working files written by run_tests.sh and 30_concurrency_v2.sh
+.results.txt
+.regression.txt
+.step.err
+.s0
+.sa
+.sb_rb
+.sb_clean
+.sa_rb
+.cleanup.sql
+c.a
