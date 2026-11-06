@@ -49,16 +49,21 @@ String friendlyError(Object error) {
       return 'This request has already changed. Refresh the list.';
     if (error.message.contains('role_not_allowed'))
       return 'Your account role does not match this profile. Sign out and log in again.';
-         // === ADDED: report errors ===
+       
+             // === ADDED: report errors ===
     if (error.message.contains('already_reported'))
       return 'You already reported this message.';
     if (error.message.contains('cannot_report_own_message'))
       return 'You cannot report your own message.';
+    // === ADDED (new): reporting a deleted message ===
+    if (error.message.contains('message_deleted'))
+      return 'This message was deleted, so it can no longer be reported.';
+    // === END ADDED (new) ===
     if (error.message.contains('invalid_report_reason'))
       return 'Choose a reason for your report.';
     if (error.message.contains('invalid_report_description'))
       return 'Keep the description under 500 characters.';
-    // === END ADDED === 
+    // === END ADDED ===
     final moderation = _moderationMessage(error.message);
     if (moderation != null) return moderation;
     if (error.message.contains('not_allowed'))
