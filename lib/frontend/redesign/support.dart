@@ -798,10 +798,15 @@ class ConversationsPage extends StatelessWidget {
 
 class ConversationPage extends StatefulWidget {
   final String requestId, name;
+
+  /// Test hook: replaces the notification stream used to notice an
+  /// administrator restriction while the page is open.
+  final Stream<List<Map<String, dynamic>>>? notifications;
   const ConversationPage({
     super.key,
     required this.requestId,
     required this.name,
+    this.notifications,
   });
 
   @override
@@ -841,12 +846,30 @@ class _ConversationPageState extends State<ConversationPage>
 
   void _refreshReopenRequests() {
     if (!mounted) return;
-    setState(() => _reopenFuture = _fetchReopenRequests());
+    // Block body: setState callbacks must not return a value (a Future here).
+    setState(() {
+      _reopenFuture = _fetchReopenRequests();
+    });
   }
 
   bool _ended = false;
   String? _endedBy;
   DateTime? _currentEndedAt;
+
+  // Admin restriction (support_requests.restricted_at, set by
+  // admin_restrict_conversation). Unlike End Chat, participants cannot reopen
+  // it, so it closes the chat independently of _ended.
+  bool _restricted = false;
+  String? _restrictionReason;
+  bool get _closed => _ended || _restricted;
+  StreamSubscription<List<Map<String, dynamic>>>? _restrictionSubscription;
+
+  void _applyRestriction(Map<String, dynamic> row) {
+    _restricted = row['restricted_at'] != null;
+    final reason = (row['restriction_reason'] as String? ?? '').trim();
+    _restrictionReason = reason.isEmpty ? null : reason;
+    if (_restricted) _mediaBusy = false;
+  }
 
   bool _statusLoading = true;
   String? _statusError;
@@ -861,11 +884,31 @@ class _ConversationPageState extends State<ConversationPage>
     _reactionsStream = SupabaseService.chatReactionsStream(widget.requestId);
     _reopenFuture = _fetchReopenRequests();
     _reopenRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && _ended && !_reopenBusy) {
+      if (mounted && _ended && !_restricted && !_reopenBusy) {
         _refreshReopenRequests();
       }
     });
     _loadStatus();
+    // support_requests is not in the Realtime publication, so an open chat
+    // learns about an administrator restriction from its notification
+    // (kind 'restricted', reference_id = this request), which is.
+    Set<String>? seenRestrictions;
+    _restrictionSubscription =
+        (widget.notifications ?? SupabaseService.notificationStream()).listen((
+          rows,
+        ) {
+          final ids = {
+            for (final r in rows)
+              if (r['kind'] == 'restricted' &&
+                  r['reference_id'] == widget.requestId)
+                '${r['id']}',
+          };
+          final seen = seenRestrictions;
+          seenRestrictions = {...?seen, ...ids};
+          if (seen != null && ids.difference(seen).isNotEmpty && mounted) {
+            _loadStatus();
+          }
+        }, onError: (Object _) {});
     _statusSubscription = SupabaseService.chatStatusStream(widget.requestId)
         .listen(
           (rows) {
@@ -873,6 +916,7 @@ class _ConversationPageState extends State<ConversationPage>
               setState(() {
                 _ended = rows.first['ended_at'] != null;
                 if (_ended) _mediaBusy = false;
+                _applyRestriction(rows.first);
                 _endedBy = rows.first['ended_by'] as String?;
                 _currentEndedAt = DateTime.tryParse(
                   '${rows.first['ended_at'] ?? ''}',
@@ -899,6 +943,7 @@ class _ConversationPageState extends State<ConversationPage>
   void dispose() {
     _reopenRefreshTimer?.cancel();
     _statusSubscription?.cancel();
+    _restrictionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _input.removeListener(_refreshInput);
     _scroll.dispose();
@@ -918,7 +963,7 @@ class _ConversationPageState extends State<ConversationPage>
     try {
       final status = await SupabaseService.client
           .from('support_requests')
-          .select('ended_at, ended_by')
+          .select('ended_at, ended_by, restricted_at, restriction_reason')
           .eq('id', widget.requestId)
           .single();
       final ended = status['ended_at'] != null;
@@ -926,6 +971,7 @@ class _ConversationPageState extends State<ConversationPage>
         setState(() {
           _ended = ended;
           if (_ended) _mediaBusy = false;
+          _applyRestriction(status);
           _endedBy = status['ended_by'] as String?;
           _currentEndedAt = DateTime.tryParse('${status['ended_at'] ?? ''}');
           _statusLoading = false;
@@ -943,7 +989,7 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   Future<void> _endChat() async {
-    if (_ending || _ended || _statusLoading || _statusError != null) return;
+    if (_ending || _closed || _statusLoading || _statusError != null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1040,7 +1086,10 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   Future<void> _requestReopen() async {
-    if (_reopenBusy || !_ended || _endedBy != SupabaseService.currentUser?.id) {
+    if (_reopenBusy ||
+        !_ended ||
+        _restricted ||
+        _endedBy != SupabaseService.currentUser?.id) {
       return;
     }
     final confirm = await showDialog<bool>(
@@ -1145,7 +1194,7 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   Future<void> _decideReopen(bool accept) async {
-    if (_reopenBusy || !_ended) return;
+    if (_reopenBusy || !_ended || _restricted) return;
     if (accept) {
       final confirm = await showDialog<bool>(
         context: context,
@@ -1210,6 +1259,58 @@ class _ConversationPageState extends State<ConversationPage>
       showAppError(context, decisionError);
     }
   }
+
+  // Shown instead of the participant "Conversation ended" banner when an
+  // administrator restricted the chat. Same tint, icon and live region style.
+  Widget _restrictedBanner() => Semantics(
+    liveRegion: true,
+    child: Container(
+      key: const ValueKey('admin_restricted_banner'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: const BoxDecoration(
+        color: _endedTint,
+        border: Border(bottom: BorderSide(color: Color(0xFFE8D7DD))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.admin_panel_settings_outlined,
+            size: 22,
+            color: _dangerColor,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ended by an administrator',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: _dangerColor,
+                  ),
+                ),
+                if (_restrictionReason != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Reason: $_restrictionReason',
+                    style: const TextStyle(fontSize: 13, color: MaakColors.ink),
+                  ),
+                ],
+                const SizedBox(height: 3),
+                const Text(
+                  'Chat history is available in read-only mode. This conversation cannot be reopened.',
+                  style: TextStyle(fontSize: 12, color: MaakColors.ink),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _reopenControls() => FutureBuilder<List<Map<String, dynamic>>>(
     future: _reopenFuture,
@@ -1363,7 +1464,7 @@ class _ConversationPageState extends State<ConversationPage>
   );
 
   Future<void> _react(String messageId, String emoji) async {
-    if (_ended || _statusLoading || _statusError != null) return;
+    if (_closed || _statusLoading || _statusError != null) return;
     try {
       await SupabaseService.toggleChatReaction(
         widget.requestId,
@@ -1382,7 +1483,7 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   void _showReactions(String messageId) {
-    if (_ended || _statusLoading || _statusError != null) return;
+    if (_closed || _statusLoading || _statusError != null) return;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1448,7 +1549,7 @@ class _ConversationPageState extends State<ConversationPage>
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ),
-              if (!deleted && !_ended)
+              if (!deleted && !_closed)
                 ListTile(
                   leading: const Icon(Icons.add_reaction_outlined),
                   title: const Text('React'),
@@ -1564,7 +1665,7 @@ class _ConversationPageState extends State<ConversationPage>
     if (text.isEmpty ||
         _busy ||
         _mediaBusy ||
-        _ended ||
+        _closed ||
         _statusLoading ||
         _statusError != null ||
         text.length > 2000) {
@@ -1581,7 +1682,7 @@ class _ConversationPageState extends State<ConversationPage>
       }
     } catch (_) {
       await _loadStatus();
-      if (mounted && !_ended) {
+      if (mounted && !_closed) {
         setState(
           () => _sendError =
               'Message not sent. Check your connection and try again.',
@@ -1618,7 +1719,7 @@ class _ConversationPageState extends State<ConversationPage>
         PopupMenuButton<String>(
           tooltip: 'Conversation options',
           enabled:
-              !_ended && !_ending && !_statusLoading && _statusError == null,
+              !_closed && !_ending && !_statusLoading && _statusError == null,
           onSelected: (value) {
             if (value == 'end') _endChat();
           },
@@ -1695,7 +1796,9 @@ class _ConversationPageState extends State<ConversationPage>
                 TextButton(onPressed: _loadStatus, child: const Text('Retry')),
               ],
             ),
-          if (_ended)
+          if (_restricted)
+            _restrictedBanner()
+          else if (_ended)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1729,7 +1832,8 @@ class _ConversationPageState extends State<ConversationPage>
                 ],
               ),
             ),
-          if (_ended) _reopenControls(),
+          // An administrator restriction cannot be reopened by participants.
+          if (_ended && !_restricted) _reopenControls(),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _stream,
@@ -1952,7 +2056,7 @@ class _ConversationPageState extends State<ConversationPage>
                                                 label: Text(
                                                   '$emoji ${reactions.where((r) => r['message_id'] == m['id'] && r['emoji'] == emoji).length}',
                                                 ),
-                                                onPressed: _ended
+                                                onPressed: _closed
                                                     ? null
                                                     : () => _react(
                                                         m['id'].toString(),
@@ -2031,29 +2135,31 @@ class _ConversationPageState extends State<ConversationPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_ended)
-                    const Padding(
-                      padding: EdgeInsets.all(12),
+                  if (_closed)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.lock_outline,
                             color: MaakColors.muted,
                             size: 18,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Flexible(
                             child: Text(
-                              'Chat ended — you can no longer send messages.',
-                              style: TextStyle(color: MaakColors.muted),
+                              _restricted
+                                  ? 'An administrator ended this chat — you can no longer send messages.'
+                                  : 'Chat ended — you can no longer send messages.',
+                              style: const TextStyle(color: MaakColors.muted),
                               textAlign: TextAlign.center,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  if (!_ended)
+                  if (!_closed)
                     ChatMediaComposer(
                       key: ValueKey(widget.requestId),
                       requestId: widget.requestId,
@@ -2066,7 +2172,7 @@ class _ConversationPageState extends State<ConversationPage>
                         if (mounted) setState(() => _mediaBusy = value);
                       },
                     ),
-                  if (!_ended && _sendError != null)
+                  if (!_closed && _sendError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
@@ -2093,7 +2199,7 @@ class _ConversationPageState extends State<ConversationPage>
                         ],
                       ),
                     ),
-                  if (!_ended)
+                  if (!_closed)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [

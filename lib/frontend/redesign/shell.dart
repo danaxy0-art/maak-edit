@@ -13,7 +13,10 @@ import 'in_app_banner.dart'; // ADDED: pop-up banner for new notifications
 
 class AppShell extends StatefulWidget {
   final String role;
-  const AppShell({super.key, required this.role});
+
+  /// Test hook: replaces the notification stream behind the pop-up banner.
+  final Stream<List<Map<String, dynamic>>>? notifications;
+  const AppShell({super.key, required this.role, this.notifications});
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -45,7 +48,10 @@ class _AppShellState extends State<AppShell> {
     }
     final nav = _navigator.currentState;
     if (nav == null) return;
-    if (n['kind'] == 'message' && n['reference_id'] != null) {
+    // 'restricted': an administrator ended this conversation (reference_id is
+    // the support request); open it so the member sees why.
+    if ((n['kind'] == 'message' || n['kind'] == 'restricted') &&
+        n['reference_id'] != null) {
       nav.push(
         MaterialPageRoute(
           builder: (_) => ConversationPage(
@@ -70,6 +76,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) => NotificationBannerHost(
 enabled: widget.role == 'volunteer' || widget.role == 'help_seeker', // Pop-up for both roles
+    stream: widget.notifications,
     onOpen: _openNotification,
     child: ShellScope(
       role: widget.role,

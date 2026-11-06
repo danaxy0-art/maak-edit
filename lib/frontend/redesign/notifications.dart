@@ -46,7 +46,9 @@ class _NotificationBellState extends State<NotificationBell> {
 }
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
+  /// Test hook: replaces the Supabase notification stream.
+  final Stream<List<Map<String, dynamic>>>? stream;
+  const NotificationsPage({super.key, this.stream});
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
@@ -57,7 +59,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    _stream = SupabaseService.notificationStream();
+    _stream = widget.stream ?? SupabaseService.notificationStream();
   }
 
   Future<void> _markAll() async {
@@ -75,7 +77,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     try {
       await SupabaseService.markNotificationRead(n['id'] as String);
       if (!mounted) return;
-      if ((n['kind'] == 'message' || n['kind'] == 'chat_reopen') &&
+      if ((n['kind'] == 'message' ||
+              n['kind'] == 'chat_reopen' ||
+              n['kind'] == 'restricted') &&
           n['reference_id'] != null) {
         Navigator.push(
           context,
@@ -165,6 +169,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: Icon(
               n['kind'] == 'message'
                   ? Icons.chat_bubble_outline
+                  : n['kind'] == 'restricted'
+                  ? Icons.admin_panel_settings_outlined
                   : Icons.notifications_outlined,
               color: AppColors.primaryNavy,
             ),
