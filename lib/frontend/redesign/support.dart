@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../../backend/models/message_order.dart';
 import 'matching_page.dart';
-
+import 'feedback.dart';//add
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,8 +10,9 @@ import '../design/components.dart';
 import '../design/tokens.dart';
 import '../theme/app_theme.dart';
 import 'ui.dart';
-import 'feedback.dart';
+
 import 'chat_media.dart';
+import 'report_message.dart'; // ADDED: report a message
 
 class DataListPage extends StatefulWidget {
   final String title;
@@ -1453,6 +1454,15 @@ class _ConversationPageState extends State<ConversationPage>
                   title: const Text('React'),
                   onTap: () => Navigator.pop(context, 'react'),
                 ),
+                              // === ADDED: report the other person's message ===
+              if (!mine && !deleted)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Report message'),
+                  subtitle: const Text('Tell an admin about this message.'),
+                  onTap: () => Navigator.pop(context, 'report'),
+                ),
+              // === END ADDED ===
               ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('Delete for me'),
@@ -1488,6 +1498,16 @@ class _ConversationPageState extends State<ConversationPage>
         _showReactions(message['id'].toString());
         return;
       }
+
+            // === ADDED: open the report dialog ===
+      if (action == 'report') {
+        await showReportMessageDialog(
+          context,
+          messageId: message['id'].toString(),
+        );
+        return;
+      }
+      // === END ADDED ===
       final everyone = action == 'everyone';
       final confirmed = await showDialog<bool>(
         context: context,
@@ -2150,13 +2170,33 @@ class JourneyPage extends StatefulWidget {
 }
 
 class _JourneyPageState extends State<JourneyPage> {
+  
   late Future<List<Map<String, dynamic>>> _future;
+  // ADDED: auto-refresh when a new request notification arrives
+  StreamSubscription<List<Map<String, dynamic>>>? _autoRefresh;
+  Set<String>? _seenNotifications;
   @override
   void initState() {
     super.initState();
     _future = SupabaseService.getRequests();
+    // ADDED
+    _autoRefresh = SupabaseService.notificationStream().listen((rows) {
+      final ids = {
+        for (final r in rows)
+          if (r['kind'] == 'request') '${r['id']}',
+      };
+      final seen = _seenNotifications;
+      _seenNotifications = {...?seen, ...ids};
+      if (seen != null && ids.difference(seen).isNotEmpty) _reload();
+    }, onError: (Object _) {});
   }
 
+  // ADDED
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    super.dispose();
+  }
   void _reload() {
     if (mounted) {
       setState(() {
@@ -2289,11 +2329,12 @@ class _RequestCard extends StatelessWidget {
     final status = request['status'];
     final name = request['contact_name'] as String? ?? 'Volunteer';
     final sent = formatDay(request['created_at'] as String?);
+        // ADDED: distinct colour per state
     final (label, icon, color) = switch (status) {
-      'pending' => ('Awaiting response', Icons.schedule, MaakColors.blush),
-      'accepted' => ('Connected', Icons.check, MaakColors.selected),
-      'canceled' => ('Canceled', Icons.block, MaakColors.fill),
-      _ => ('Declined', Icons.close, MaakColors.fill),
+      'pending' => ('Awaiting response', Icons.schedule, const Color(0xFFFFE9A8)),
+      'accepted' => ('Connected', Icons.check, const Color(0xFFCDEFD8)),
+      'canceled' => ('Canceled', Icons.block, const Color(0xFFE3E5E8)),
+      _ => ('Declined', Icons.close, const Color(0xFFFAC9C9)),
     };
     return SoftCard(
       flat: past,

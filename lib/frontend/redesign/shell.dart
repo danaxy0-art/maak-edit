@@ -9,6 +9,7 @@ import 'navigation.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'support.dart';
+import 'in_app_banner.dart'; // ADDED: pop-up banner for new notifications
 
 class AppShell extends StatefulWidget {
   final String role;
@@ -36,38 +37,73 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) => ShellScope(
-    role: widget.role,
-    selectTab: _select,
-    child: BotanicalScaffold(
-      body: NavigatorPopHandler(
-        onPopWithResult: (_) => _navigator.currentState!.pop(),
-        child: Navigator(
-          key: _navigator,
-          onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _page(0)),
+   // === ADDED: open the screen a banner points to ===
+  void _openNotification(Map<String, dynamic> n) {
+    final id = n['id'];
+    if (id is String) {
+      SupabaseService.markNotificationRead(id).catchError((_) {});
+    }
+    final nav = _navigator.currentState;
+    if (nav == null) return;
+    if (n['kind'] == 'message' && n['reference_id'] != null) {
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => ConversationPage(
+            requestId: n['reference_id'] as String,
+            name: 'Conversation',
+          ),
         ),
-      ),
-      bottomNavigationBar: StreamBuilder<int>(
-        stream: _unread,
-        builder: (context, snapshot) => MaakNavBar(
-          currentIndex: _index,
-          onTap: _select,
-          items: [
-            const MaakNavItem(icon: Icons.home_outlined, label: 'Home'),
-            MaakNavItem(
-              icon: widget.role == 'volunteer'
-                  ? Icons.inbox_outlined
-                  : Icons.eco_outlined,
-              label: widget.role == 'volunteer' ? 'Requests' : 'Journey',
-            ),
-            MaakNavItem(
-              icon: Icons.chat_bubble_outline,
-              label: 'Messages',
-              unreadCount: snapshot.data ?? 0,
-            ),
-            const MaakNavItem(icon: Icons.person_outline, label: 'Profile'),
-          ],
+      );
+    } else if (n['kind'] == 'request') {
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => widget.role == 'volunteer'
+              ? const RequestsPage()
+              : const JourneyPage(),
+        ),
+      );
+    }
+  }
+  // === END ADDED ===
+
+
+  @override
+  Widget build(BuildContext context) => NotificationBannerHost(
+    enabled: widget.role == 'volunteer', // ADDED: pop-up for volunteers only
+    onOpen: _openNotification,
+    child: ShellScope(
+      role: widget.role,
+      selectTab: _select,
+      child: BotanicalScaffold(
+        body: NavigatorPopHandler(
+          onPopWithResult: (_) => _navigator.currentState!.pop(),
+          child: Navigator(
+            key: _navigator,
+            onGenerateRoute: (_) =>
+                MaterialPageRoute(builder: (_) => _page(0)),
+          ),
+        ),
+        bottomNavigationBar: StreamBuilder<int>(
+          stream: _unread,
+          builder: (context, snapshot) => MaakNavBar(
+            currentIndex: _index,
+            onTap: _select,
+            items: [
+              const MaakNavItem(icon: Icons.home_outlined, label: 'Home'),
+              MaakNavItem(
+                icon: widget.role == 'volunteer'
+                    ? Icons.inbox_outlined
+                    : Icons.eco_outlined,
+                label: widget.role == 'volunteer' ? 'Requests' : 'Journey',
+              ),
+              MaakNavItem(
+                icon: Icons.chat_bubble_outline,
+                label: 'Messages',
+                unreadCount: snapshot.data ?? 0,
+              ),
+              const MaakNavItem(icon: Icons.person_outline, label: 'Profile'),
+            ],
+          ),
         ),
       ),
     ),

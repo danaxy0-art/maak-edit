@@ -930,6 +930,20 @@ class SupabaseService {
       );
     }
   }
+    // === ADDED: report a message (reports table + report_maak_message RPC) ===
+  static Future<void> reportMessage({
+    required String messageId,
+    required String reason,
+    String? description,
+  }) async => await client.rpc(
+    'report_maak_message',
+    params: {
+      'p_message_id': messageId,
+      'p_reason': reason,
+      'p_description': description,
+    },
+  );
+  // === END ADDED ===
 
   static Future<void> cancelRequest(String id) async =>
       await client.rpc('cancel_support_request', params: {'p_request_id': id});
