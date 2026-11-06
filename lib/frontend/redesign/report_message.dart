@@ -66,10 +66,10 @@ class _ReportMessageDialogState extends State<ReportMessageDialog> {
   final text = _description.text.trim();
 
   if (text.length > kReportDescriptionMax) {
-    showAppError(
-      context,
-      Exception('Description must be 500 characters or fewer.'),
-    );
+         showAppError(
+        context,
+        ArgumentError('Description must be 500 characters or fewer.'),
+      );
     return;
   }
 
