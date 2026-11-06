@@ -696,6 +696,61 @@ class SupabaseService {
     );
   }
 
+  // Admin report management (20261106100000_admin_report_management.sql).
+  // Every RPC is admin-only on the server. getReports returns null when the
+  // migration is not installed, so the Reports page explains that instead.
+  static Future<List<Map<String, dynamic>>?> getReports({
+    String? status,
+  }) async {
+    try {
+      return List<Map<String, dynamic>>.from(
+        await client.rpc('admin_list_reports', params: {'p_status': status})
+            as List,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getReportDetails(String reportId) async =>
+      Map<String, dynamic>.from(
+        await client.rpc(
+              'admin_report_details',
+              params: {'p_report_id': reportId},
+            )
+            as Map,
+      );
+
+  static Future<void> dismissReport({
+    required String reportId,
+    required String reason,
+  }) async {
+    final error = validateDismissReason(reason);
+    if (error != null) throw ArgumentError(error);
+    await client.rpc(
+      'admin_dismiss_report',
+      params: {'p_report_id': reportId, 'p_note': reason.trim()},
+    );
+  }
+
+  /// Restricts the reported conversation and resolves its open reports.
+  /// Returns the server result, including `resolved_reports`.
+  static Future<Map<String, dynamic>> endReportedConversation({
+    required String reportId,
+    required String reason,
+  }) async {
+    final error = validateEndConversationReason(reason);
+    if (error != null) throw ArgumentError(error);
+    return Map<String, dynamic>.from(
+      await client.rpc(
+            'admin_end_reported_conversation',
+            params: {'p_report_id': reportId, 'p_reason': reason.trim()},
+          )
+          as Map,
+    );
+  }
+
   static Future<String> uploadVerificationDocument({
     required List<int> fileBytes,
     required String fileName,

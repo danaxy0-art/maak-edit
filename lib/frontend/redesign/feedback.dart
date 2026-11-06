@@ -135,6 +135,18 @@ const _moderationMessages = {
   'appeal_not_current':
       'This appeal belongs to an earlier restriction. Refresh the list.',
   'invalid_decision_note': 'Enter a note of at most 1000 characters.',
+  // Admin report management (20261106100000_admin_report_management.sql).
+  'report_already_decided':
+      'Another administrator has already decided this report. Refresh to see the latest status.',
+  'report_not_found': 'This report no longer exists. Refresh the list.',
+  'invalid_report_decision_note': 'Enter a reason of at most 500 characters.',
+  'invalid_report_status': 'Choose a valid report status.',
+  'conversation_already_restricted':
+      'An administrator has already ended this conversation. You can dismiss the report instead.',
+  'conversation_unavailable':
+      'This conversation is no longer available. You can dismiss the report instead.',
+  'conversation_changed':
+      'This conversation has already changed. Refresh and try again.',
 };
 
 String? _moderationMessage(String message) {

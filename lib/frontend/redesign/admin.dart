@@ -13,9 +13,11 @@ import 'app_text_field.dart';
 import 'profile.dart';
 import 'feedback.dart';
 import 'condition_reviews.dart';
+import 'report_message.dart' show kReportReasons;
 
 part 'admin_accounts.dart';
 part 'admin_appeals.dart';
+part 'admin_reports.dart';
 
 // Admin layouts use a wider content area on tablets while preserving
 // Ma'ak's existing theme, bottom navigation, and phone widths.
@@ -249,6 +251,18 @@ class _AdminOverviewState extends State<AdminOverview> {
                         'Block or reactivate accounts',
                         Icons.manage_accounts_outlined,
                         () => widget.select(3),
+                      ),
+                      const SizedBox(height: 14),
+                      _menu(
+                        'Message reports',
+                        'Review reported messages and decisions',
+                        Icons.flag_outlined,
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ReportsAdminPage(),
+                          ),
+                        ),
                       ),
                       const SectionTitle('Latest applications'),
                       if (applications.isEmpty)

@@ -139,3 +139,18 @@ String? validateRejectionNote(String? value) {
 /// Optional note when approving an appeal; at most 1000 characters.
 String? validateApprovalNote(String? value) =>
     (value?.trim().length ?? 0) > 1000 ? 'Use at most 1000 characters' : null;
+
+/// Same rule as admin_dismiss_report(): non-empty after trimming, at most 500.
+String? validateDismissReason(String? value) =>
+    _reportDecision(value, 'Explain why this report is dismissed');
+
+/// Same rule as admin_end_reported_conversation(): 1-500 after trimming.
+String? validateEndConversationReason(String? value) =>
+    _reportDecision(value, 'Explain why this conversation is ended');
+
+String? _reportDecision(String? value, String empty) {
+  final v = value?.trim() ?? '';
+  if (v.isEmpty) return empty;
+  if (v.length > 500) return 'Use at most 500 characters';
+  return null;
+}
