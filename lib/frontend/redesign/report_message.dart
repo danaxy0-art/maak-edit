@@ -54,14 +54,28 @@ class _ReportMessageDialogState extends State<ReportMessageDialog> {
     super.dispose();
   }
 
-  Future<void> _send() async {
-    if (_reason == null) {
-      setState(() => _showReasonError = true);
-      return;
-    }
-    setState(() => _busy = true);
-    final text = _description.text.trim();
-    try {
+ Future<void> _send() async {
+  if (_busy) return;
+
+  if (_reason == null) {
+    setState(() => _showReasonError = true);
+    return;
+  }
+
+  // Validate optional description length
+  final text = _description.text.trim();
+
+  if (text.length > kReportDescriptionMax) {
+    showAppError(
+      context,
+      Exception('Description must be 500 characters or fewer.'),
+    );
+    return;
+  }
+
+  setState(() => _busy = true);
+
+  try {
       final submit = widget.submit;
       if (submit != null) {
         await submit(_reason!, text.isEmpty ? null : text);
