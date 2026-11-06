@@ -69,7 +69,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) => NotificationBannerHost(
-    enabled: widget.role == 'volunteer', // ADDED: pop-up for volunteers only
+enabled: widget.role == 'volunteer' || widget.role == 'help_seeker', // Pop-up for both roles
     onOpen: _openNotification,
     child: ShellScope(
       role: widget.role,
