@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../../backend/models/message_order.dart';
 import 'matching_page.dart';
-import 'feedback.dart';//add
+import 'feedback.dart'; //add
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1085,7 +1085,7 @@ class _ConversationPageState extends State<ConversationPage>
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                   "Reopening this conversation requires your peer's approval.",
+                    "Reopening this conversation requires your peer's approval.",
                     style: TextStyle(
                       color: _dangerColor,
                       fontWeight: FontWeight.w600,
@@ -1225,7 +1225,7 @@ class _ConversationPageState extends State<ConversationPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-'Reopen request sent. Waiting for your peer\'s response.',
+            'Reopen request sent. Waiting for your peer\'s response.',
           ),
         ),
       );
@@ -1236,7 +1236,7 @@ class _ConversationPageState extends State<ConversationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-'A reopen request is still pending. Please wait for your peer\'s response.',
+              'A reopen request is still pending. Please wait for your peer\'s response.',
             ),
           ),
         );
@@ -1562,31 +1562,32 @@ class _ConversationPageState extends State<ConversationPage>
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
-                children: [
-  '\u2764\uFE0F',
-  '\u{1F44D}',
-  '\u{1F602}',
-  '\u{1F62E}',
-  '\u{1F622}',
-]
-                    .map(
-                      (emoji) => Semantics(
-                        label: 'React with $emoji',
-                        button: true,
-                        child: IconButton(
-                          tooltip: 'React with $emoji',
-                          onPressed: () {
-                            Navigator.pop(sheetContext);
-                            _react(messageId, emoji);
-                          },
-                          icon: Text(
-                            emoji,
-                            style: const TextStyle(fontSize: 26),
+                children:
+                    [
+                          '\u2764\uFE0F',
+                          '\u{1F44D}',
+                          '\u{1F602}',
+                          '\u{1F62E}',
+                          '\u{1F622}',
+                        ]
+                        .map(
+                          (emoji) => Semantics(
+                            label: 'React with $emoji',
+                            button: true,
+                            child: IconButton(
+                              tooltip: 'React with $emoji',
+                              onPressed: () {
+                                Navigator.pop(sheetContext);
+                                _react(messageId, emoji);
+                              },
+                              icon: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 26),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+                        )
+                        .toList(),
               ),
             ],
           ),
@@ -1623,7 +1624,7 @@ class _ConversationPageState extends State<ConversationPage>
                   title: const Text('React'),
                   onTap: () => Navigator.pop(context, 'react'),
                 ),
-                              // === ADDED: report the other person's message ===
+              // === ADDED: report the other person's message ===
               if (!mine && !deleted)
                 ListTile(
                   leading: const Icon(Icons.flag_outlined),
@@ -1670,7 +1671,7 @@ class _ConversationPageState extends State<ConversationPage>
         return;
       }
 
-            // === ADDED: open the report dialog ===
+      // === ADDED: open the report dialog ===
       if (action == 'report') {
         await showReportMessageDialog(
           context,
@@ -2389,7 +2390,6 @@ class JourneyPage extends StatefulWidget {
 }
 
 class _JourneyPageState extends State<JourneyPage> {
-  
   late Future<List<Map<String, dynamic>>> _future;
   // ADDED: auto-refresh when a new request notification arrives
   StreamSubscription<List<Map<String, dynamic>>>? _autoRefresh;
@@ -2416,6 +2416,7 @@ class _JourneyPageState extends State<JourneyPage> {
     _autoRefresh?.cancel();
     super.dispose();
   }
+
   void _reload() {
     if (mounted) {
       setState(() {
@@ -2548,7 +2549,7 @@ class _RequestCard extends StatelessWidget {
     final status = request['status'];
     final name = request['contact_name'] as String? ?? 'Volunteer';
     final sent = formatDay(request['created_at'] as String?);
-        // ADDED: distinct colour per state
+    // ADDED: distinct colour per state
     final (label, icon, color) = switch (status) {
       'pending' => ('Awaiting response', Icons.schedule, MaakColors.pending),
       'accepted' => ('Connected', Icons.check, const Color(0xFFCDEFD8)),
@@ -2606,17 +2607,17 @@ class _RequestCard extends StatelessWidget {
             ),
           ],
           if (status == 'accepted') ...[
-  const SizedBox(height: MaakSpace.md),
-  PrimaryButton(
-    'Open conversation',
-    icon: Icons.chat_bubble_outline,
-    onPressed: () => ConversationPage.open(
-      context,
-      requestId: request['id'] as String,
-      name: name,
-    ),
-  ),
-],
+            const SizedBox(height: MaakSpace.md),
+            PrimaryButton(
+              'Open conversation',
+              icon: Icons.chat_bubble_outline,
+              onPressed: () => ConversationPage.open(
+                context,
+                requestId: request['id'] as String,
+                name: name,
+              ),
+            ),
+          ],
         ],
       ),
     );
