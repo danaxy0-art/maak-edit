@@ -4,6 +4,15 @@ part of 'admin.dart';
 // on its own tab in the admin navigation bar. The server enforces every rule: admin-only, at most
 // three appeals per block, one pending, and a single decision per appeal.
 // Member-written text is always shown as plain text.
+// After three rejections, one more appeal opens 90 days after each rejection
+// (20261107120000_appeal_cooldown.sql).
+
+/// "2 of 3" for the first three appeals; later ones read "4 (after 90-day wait)".
+String _appealAttemptLabel(Map<String, dynamic> appeal) {
+  final attempt = appeal['attempt'] as num? ?? 1;
+  final max = appeal['max_appeals'] as num? ?? 3;
+  return attempt > max ? '$attempt (after 90-day wait)' : '$attempt of $max';
+}
 
 /// Shown on Account details while the member has a pending appeal.
 class _PendingAppealBanner extends StatelessWidget {
@@ -25,7 +34,7 @@ class _PendingAppealBanner extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Pending appeal · attempt ${appeal['attempt']} of ${appeal['max_appeals'] ?? 3}',
+                'Pending appeal · attempt ${_appealAttemptLabel(appeal)}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -279,7 +288,7 @@ class _PendingAppealCard extends StatelessWidget {
                 children: [
                   RoleChip(_roleLabel(appeal['role'] as String?)),
                   RoleChip(
-                    'Attempt ${appeal['attempt']} of ${appeal['max_appeals'] ?? 3}',
+                    'Attempt ${_appealAttemptLabel(appeal)}',
                   ),
                 ],
               ),
@@ -417,7 +426,7 @@ class _AppealDetailPageState extends State<AppealDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _InfoRow('Submitted', formatDay(_a['submitted_at'] as String?)),
-          _InfoRow('Attempt', '${_a['attempt']} of ${_a['max_appeals'] ?? 3}'),
+          _InfoRow('Attempt', _appealAttemptLabel(_a)),
           const SizedBox(height: 6),
           const Text(
             'Explanation',

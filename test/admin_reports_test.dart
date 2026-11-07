@@ -127,6 +127,7 @@ void main() {
   final holds = <String, Completer<void>>{};
   var reports = <Map<String, dynamic>>[];
   var detail = <String, Map<String, dynamic>>{};
+  var restrictionHistory = <Map<String, dynamic>>[];
 
   setUpAll(() async {
     await Supabase.initialize(
@@ -205,6 +206,35 @@ void main() {
                   'resolved_reports': 2,
                 }
               : {'report_id': id, 'status': 'dismissed'};
+        } else if (name == 'admin_conversation_restriction_history') {
+          data = restrictionHistory;
+        } else if (name == 'admin_lift_conversation_restriction') {
+          // Like the database: clears the restriction, records the lift.
+          final requestId = params!['p_request_id'];
+          for (final id in detail.keys.toList()) {
+            if (detail[id]!['request_id'] != requestId) continue;
+            detail[id] = {
+              ...detail[id]!,
+              'conversation': {
+                ...(detail[id]!['conversation'] as Map),
+                'restricted_at': null,
+                'restriction_reason': null,
+                'restricted_by_name': null,
+              },
+            };
+          }
+          restrictionHistory = [
+            {
+              'id': 'h2',
+              'action': 'lifted',
+              'reason': params['p_reason'],
+              'actor_name': 'Amal Admin',
+              'actor_is_me': true,
+              'created_at': '2026-11-07T09:00:00Z',
+            },
+            ...restrictionHistory,
+          ];
+          data = {'request_id': requestId, 'lifted': true};
         } else {
           data = [];
         }
@@ -229,6 +259,7 @@ void main() {
     holds.clear();
     reports = [];
     detail = {};
+    restrictionHistory = [];
   });
   tearDownAll(() => Supabase.instance.dispose());
 
@@ -635,6 +666,120 @@ void main() {
         inDialog(find.text('Check your internet connection and try again.')),
         findsOneWidget,
       );
+    });
+  });
+
+  group('Lift restriction', () {
+    Future<void> tapLift(WidgetTester tester) async {
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('lift_restriction_button')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('lift_restriction_button')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('only a restricted conversation offers Lift restriction', (
+      tester,
+    ) async {
+      seed();
+      await openDetail(tester, r1);
+      expect(
+        find.byKey(const ValueKey('lift_restriction_button')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox()); // fresh page state
+      await openDetail(tester, r3);
+      expect(
+        find.byKey(const ValueKey('lift_restriction_button')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('requires a reason, lifts, notifies, and records history', (
+      tester,
+    ) async {
+      seed();
+      restrictionHistory = [
+        {
+          'id': 'h1',
+          'action': 'restricted',
+          'reason': 'Harassment',
+          'actor_name': 'Basma Admin',
+          'actor_is_me': false,
+          'created_at': '2026-11-06T08:00:00Z',
+        },
+      ];
+      await openDetail(tester, r3);
+      expect(find.text('Restriction history'), findsOneWidget);
+      expect(
+        find.text('Conversation restricted by Basma Admin'),
+        findsOneWidget,
+      );
+      await tapLift(tester);
+      expect(find.text('Lift this restriction?'), findsOneWidget);
+      expect(find.textContaining('without your reason'), findsOneWidget);
+      expect(
+        tester.widget<AlertDialog>(find.byType(AlertDialog)).actionsAlignment,
+        MainAxisAlignment.center,
+      );
+      await tester.tap(confirm('Lift restriction'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Explain why the restriction is lifted'),
+        findsOneWidget,
+      );
+      expect(count('admin_lift_conversation_restriction'), 0);
+      await tester.enterText(
+        inDialog(find.byType(TextField)),
+        ' Restricted by mistake ',
+      );
+      await tester.tap(confirm('Lift restriction'));
+      await settle(tester);
+      expect(bodies['admin_lift_conversation_restriction'], {
+        'p_request_id': '60000000-0000-0000-0000-0000000000c1',
+        'p_reason': 'Restricted by mistake',
+      });
+      expect(
+        find.text('Restriction lifted. Both participants were notified.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lift_restriction_button')),
+        findsNothing,
+      );
+      expect(find.text('Ended by an administrator'), findsNothing);
+      expect(
+        find.text('Restriction lifted by Amal Admin (you)'),
+        findsOneWidget,
+      );
+      expect(find.text('Restricted by mistake'), findsOneWidget);
+    });
+
+    testWidgets('a restriction already lifted elsewhere is explained', (
+      tester,
+    ) async {
+      seed();
+      await openDetail(tester, r3);
+      overrides['admin_lift_conversation_restriction'] = (
+        400,
+        {'code': 'P0001', 'message': 'conversation_not_restricted'},
+      );
+      await tapLift(tester);
+      await tester.enterText(inDialog(find.byType(TextField)), 'Not needed');
+      await tester.tap(confirm('Lift restriction'));
+      await settle(tester);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        find.textContaining('This restriction changed elsewhere'),
+        findsOneWidget,
+      );
+    });
+
+    test('lift reason follows the server rule', () {
+      expect(validateLiftReason(' '), 'Explain why the restriction is lifted');
+      expect(validateLiftReason('x' * 501), 'Use at most 500 characters');
+      expect(validateLiftReason('ok'), isNull);
     });
   });
 

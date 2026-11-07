@@ -471,6 +471,121 @@ void main() {
       );
     });
 
+    // Repeating 90-day cooldown (20261107120000_appeal_cooldown.sql).
+    Map<String, dynamic> cycleStatus({
+      required int attempt,
+      required String latestStatus,
+      String? unavailable,
+      int? daysRemaining,
+    }) => {
+      ...appealStatus(
+        used: attempt,
+        unavailable: unavailable,
+        appeals: [
+          {
+            'attempt': attempt,
+            'status': latestStatus,
+            'submitted_at': '2026-10-20T10:00:00Z',
+            if (latestStatus == 'rejected') 'decision_note': 'Not approved.',
+          },
+        ],
+      ),
+      'in_cooldown_cycle': true,
+      'appeals_remaining': unavailable == null ? 1 : 0,
+      'cooldown_days': 90,
+      'cooldown_days_remaining': daysRemaining,
+      'cooldown_until': daysRemaining == null ? null : '2027-01-18T10:00:00Z',
+    };
+
+    testWidgets('after the third rejection a countdown shows the days left', (
+      tester,
+    ) async {
+      myStatus = cycleStatus(
+        attempt: 3,
+        latestStatus: 'rejected',
+        unavailable: 'appeal_cooldown',
+        daysRemaining: 37,
+      );
+      await pumpAt(tester, screen, tallPhone);
+      expect(
+        find.byKey(const ValueKey('appeal_cooldown_countdown')),
+        findsOneWidget,
+      );
+      expect(find.text('37 days'), findsOneWidget);
+      expect(find.textContaining('until you can appeal again'), findsOneWidget);
+      expect(find.textContaining('appeal again in 37 days'), findsOneWidget);
+      expect(enabled(tester, 'Request an appeal'), isFalse);
+      expect(find.textContaining('appeals remaining'), findsNothing);
+    });
+
+    testWidgets('the last day reads "1 day"', (tester) async {
+      myStatus = cycleStatus(
+        attempt: 5,
+        latestStatus: 'rejected',
+        unavailable: 'appeal_cooldown',
+        daysRemaining: 1,
+      );
+      await pumpAt(tester, screen, tallPhone);
+      expect(find.text('1 day'), findsOneWidget);
+      expect(find.text('Appeal 5 (additional appeal)'), findsOneWidget);
+    });
+
+    testWidgets('when the wait is over one more appeal can be sent', (
+      tester,
+    ) async {
+      myStatus = cycleStatus(attempt: 3, latestStatus: 'rejected');
+      await pumpAt(tester, screen, tallPhone);
+      expect(
+        find.byKey(const ValueKey('appeal_cycle_available')),
+        findsOneWidget,
+      );
+      expect(enabled(tester, 'Request an appeal'), isTrue);
+      expect(
+        find.byKey(const ValueKey('appeal_cooldown_countdown')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('an additional appeal under review shows as pending', (
+      tester,
+    ) async {
+      myStatus = cycleStatus(
+        attempt: 4,
+        latestStatus: 'pending',
+        unavailable: 'appeal_pending',
+      );
+      await pumpAt(tester, screen, tallPhone);
+      expect(find.text('Appeal 4 (additional appeal)'), findsOneWidget);
+      expect(find.textContaining('being reviewed'), findsWidgets);
+      expect(enabled(tester, 'Request an appeal'), isFalse);
+    });
+
+    testWidgets(
+      'a cooldown refusal from the server closes the dialog and reloads',
+      (tester) async {
+        myStatus = cycleStatus(attempt: 3, latestStatus: 'rejected');
+        overrides['submit_my_appeal'] = (
+          400,
+          {'code': 'P0001', 'message': 'appeal_cooldown'},
+        );
+        await pumpAt(tester, screen, tallPhone);
+        await openAppealDialog(tester);
+        await tester.enterText(inDialog(find.byType(TextField)), 'Please');
+        await tester.tap(confirm('Submit appeal'));
+        await settle(tester);
+        expect(
+          find.byType(AlertDialog),
+          findsOneWidget,
+          reason: 'explanation popup',
+        );
+        expect(find.textContaining('90-day waiting period'), findsOneWidget);
+        expect(count('my_appeal_status'), 2, reason: 'status was reloaded');
+        // Close it: only one error popup may be open app-wide (feedback.dart).
+        await tester.tap(find.text('Close'));
+        await settle(tester);
+      },
+    );
+
     testWidgets('closed appeals are labelled Closed', (tester) async {
       myStatus = appealStatus(
         used: 1,
@@ -628,6 +743,23 @@ void main() {
   });
 
   group('Admin appeals', () {
+    testWidgets('an appeal after the 90-day wait is labelled clearly', (
+      tester,
+    ) async {
+      pending = [
+        {...pendingAppeal(), 'attempt': 4},
+      ];
+      await pumpAt(tester, const AppealsAdminPage(), phone);
+      expect(find.text('Attempt 4 (after 90-day wait)'), findsOneWidget);
+      expect(find.textContaining('4 of 3'), findsNothing);
+      await pumpAt(
+        tester,
+        AppealDetailPage(appeal: {...pendingAppeal(), 'attempt': 4}),
+        tallPhone,
+      );
+      expect(find.text('4 (after 90-day wait)'), findsOneWidget);
+    });
+
     testWidgets('Accounts shows the pending count and opens Appeals', (
       tester,
     ) async {

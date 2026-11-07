@@ -74,7 +74,8 @@ class _AppShellState extends State<AppShell> {
     // the support request); open it so the member sees why.
     if ((n['kind'] == 'message' ||
             n['kind'] == 'chat_reopen' ||
-            n['kind'] == 'restricted') &&
+            n['kind'] == 'restricted' ||
+            n['kind'] == 'restriction_lifted') &&
         n['reference_id'] != null) {
       ConversationPage.open(
         context,

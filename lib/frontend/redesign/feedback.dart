@@ -147,6 +147,15 @@ const _moderationMessages = {
       'This conversation is no longer available. You can dismiss the report instead.',
   'conversation_changed':
       'This conversation has already changed. Refresh and try again.',
+  // Lift restriction (20261107110000_admin_lift_restriction.sql).
+  'conversation_not_restricted':
+      'This restriction has already been lifted. Refresh to see the latest status.',
+  'invalid_lift_reason': 'Enter a reason of at most 500 characters.',
+  // Appeal cooldown (20261107120000_appeal_cooldown.sql).
+  'appeal_cooldown':
+      'You can appeal again after the 90-day waiting period. Tap Check again to see the date.',
+  'appeal_attempt_invalid':
+      'Your appeal status has changed. Tap Check again and try once more.',
 };
 
 String? _moderationMessage(String message) {

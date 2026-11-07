@@ -80,7 +80,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (!mounted) return;
       if ((n['kind'] == 'message' ||
               n['kind'] == 'chat_reopen' ||
-              n['kind'] == 'restricted') &&
+              n['kind'] == 'restricted' ||
+              n['kind'] == 'restriction_lifted') &&
           n['reference_id'] != null) {
         ConversationPage.open(
           context,
@@ -175,6 +176,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ? Icons.people_outline
                   : n['kind'] == 'restricted'
                   ? Icons.admin_panel_settings_outlined
+                  : n['kind'] == 'restriction_lifted'
+                  ? Icons.lock_open_outlined
                   : Icons.notifications_outlined,
               color: AppColors.primaryNavy,
             ),

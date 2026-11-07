@@ -182,7 +182,8 @@ void main() {
       t,
     ) async {
       await open(t, restricted: true);
-      await t.tap(find.byTooltip('Message options · Delete'));
+      // Message options now open with a long press on the message (3ee96bb).
+      await t.longPress(find.text('Hello, how are you feeling today?'));
       await settle(t);
       expect(find.text('Message options'), findsOneWidget);
       expect(find.text('React'), findsNothing);
@@ -196,7 +197,8 @@ void main() {
       t,
     ) async {
       await open(t, endedByMe: true);
-      await t.tap(find.byTooltip('Message options · Delete'));
+      // Message options now open with a long press on the message (3ee96bb).
+      await t.longPress(find.text('Hello, how are you feeling today?'));
       await settle(t);
       expect(find.text('Delete for me'), findsOneWidget);
     });
@@ -431,5 +433,87 @@ void main() {
       await settle(t);
       expect(find.byType(RequestsPage), findsWidgets);
     });
+  });
+
+  group('Restriction lifted (20261107110000_admin_lift_restriction.sql)', () {
+    testScreen('a lift while the chat is open removes the banner', (t) async {
+      final notes = StreamController<List<Map<String, dynamic>>>.broadcast();
+      addTearDown(notes.close);
+      final chat = await open(t, restricted: true, notifications: notes.stream);
+      notes.add([note('l0', 'restricted', reference: req)]); // baseline
+      await settle(t);
+      expectRestrictedUi(t);
+      chat.restricted = false; // the admin lifted it
+      notes.add([
+        note('l1', 'restriction_lifted', reference: req),
+        note('l0', 'restricted', reference: req),
+      ]);
+      await settle(t);
+      expect(find.text('Ended by an administrator'), findsNothing);
+      expect(find.widgetWithText(TextField, 'Write a message...'), findsOne);
+      expect(find.byType(ChatMediaComposer), findsOneWidget);
+      expect(menuEnabled(t), isTrue, reason: 'End chat available again');
+      expect(find.text('Hello, how are you feeling today?'), findsOneWidget);
+    });
+
+    testScreen('a chat a participant ended stays ended after the lift', (
+      t,
+    ) async {
+      final notes = StreamController<List<Map<String, dynamic>>>.broadcast();
+      addTearDown(notes.close);
+      final chat = await open(
+        t,
+        restricted: true,
+        endedByMe: true,
+        notifications: notes.stream,
+      );
+      notes.add([]);
+      await settle(t);
+      chat.restricted = false;
+      notes.add([note('l2', 'restriction_lifted', reference: req)]);
+      await settle(t);
+      expect(find.text('Ended by an administrator'), findsNothing);
+      expect(find.text('Conversation ended'), findsOneWidget);
+      expect(find.text('Request to reopen chat'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'Write a message...'),
+        findsNothing,
+      );
+    });
+
+    for (final volunteer in [false, true]) {
+      final role = volunteer ? 'volunteer' : 'help_seeker';
+      testScreen('$role: tapping restriction_lifted opens the chat', (t) async {
+        await t.runAsync(() => signIn('Layla'));
+        final chat = Chat()..iAmVolunteer = volunteer;
+        fakeBackend = backend(chat, role: role);
+        // Notifications page.
+        await pumpScreen(
+          t,
+          NotificationsPage(
+            stream: Stream.value([
+              note('l3', 'restriction_lifted', reference: req),
+            ]),
+          ),
+        );
+        expect(find.byIcon(Icons.lock_open_outlined), findsOne);
+        await t.tap(find.text('Title restriction_lifted'));
+        await settle(t);
+        expect(conversation(req), findsOneWidget);
+        expect(chat.calls, contains('PATCH notifications'));
+        // Pop-up banner.
+        await t.pumpWidget(const SizedBox());
+        final notes = StreamController<List<Map<String, dynamic>>>();
+        addTearDown(notes.close);
+        await pumpScreen(t, AppShell(role: role, notifications: notes.stream));
+        notes.add([]);
+        await settle(t);
+        notes.add([note('l4', 'restriction_lifted', reference: req)]);
+        await settle(t);
+        await t.tap(find.text('Title restriction_lifted'));
+        await settle(t);
+        expect(conversation(req), findsOneWidget);
+      });
+    }
   });
 }

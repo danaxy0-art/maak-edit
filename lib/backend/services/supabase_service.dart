@@ -755,6 +755,42 @@ class SupabaseService {
     );
   }
 
+  // Lift an administrator restriction (20261107110000_admin_lift_restriction.sql).
+  // Admin-only on the server; ended chats and account blocks are unaffected.
+  static Future<Map<String, dynamic>> liftConversationRestriction({
+    required String requestId,
+    required String reason,
+  }) async {
+    final error = validateLiftReason(reason);
+    if (error != null) throw ArgumentError(error);
+    return Map<String, dynamic>.from(
+      await client.rpc(
+            'admin_lift_conversation_restriction',
+            params: {'p_request_id': requestId, 'p_reason': reason.trim()},
+          )
+          as Map,
+    );
+  }
+
+  /// Restriction and lift history, newest first. Null when the lift migration
+  /// is not installed yet.
+  static Future<List<Map<String, dynamic>>?> getRestrictionHistory(
+    String requestId,
+  ) async {
+    try {
+      return List<Map<String, dynamic>>.from(
+        await client.rpc(
+              'admin_conversation_restriction_history',
+              params: {'p_request_id': requestId},
+            )
+            as List,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
   static Future<String> uploadVerificationDocument({
     required List<int> fileBytes,
     required String fileName,

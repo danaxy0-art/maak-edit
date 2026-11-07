@@ -226,9 +226,19 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
     final remaining = status['appeals_remaining'] as int? ?? 0;
     final max = status['max_appeals'] as int? ?? 3;
     final canAppeal = status['can_appeal'] == true;
+    // After the first three appeals, one more opens 90 days after each rejection
+    // (computed by the server from the stored rejection time).
+    final inCycle = status['in_cooldown_cycle'] == true;
+    final cooldownDays = status['cooldown_days_remaining'] as int?;
+    final cooldownUntil = formatDay(status['cooldown_until'] as String?);
+    final dayWord = cooldownDays == 1 ? 'day' : 'days';
     final unavailable = switch (status['unavailable_reason']) {
       'appeal_pending' =>
         "Your appeal is being reviewed. You can't submit another until an administrator responds.",
+      'appeal_cooldown' => cooldownDays == null
+          ? 'You can appeal again after the 90-day waiting period.'
+          : 'Your last appeal was not approved. You can appeal again in $cooldownDays $dayWord'
+                '${cooldownUntil.isEmpty ? '' : ', on $cooldownUntil'}.',
       'appeal_limit_reached' =>
         'You have used all $max appeals for this restriction.',
       _ => null,
@@ -241,7 +251,9 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Appeal ${latest['attempt']} of $max',
+                  (latest['attempt'] as num? ?? 1) > max
+                      ? 'Appeal ${latest['attempt']} (additional appeal)'
+                      : 'Appeal ${latest['attempt']} of $max',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -274,12 +286,63 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
               style: TextStyle(color: AppColors.textMuted, height: 1.4),
             ),
           ),
-        Text(
-          remaining == 1
-              ? '1 of $max appeals remaining for this restriction'
-              : '$remaining of $max appeals remaining for this restriction',
-          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-        ),
+        if (!inCycle)
+          Text(
+            remaining == 1
+                ? '1 of $max appeals remaining for this restriction'
+                : '$remaining of $max appeals remaining for this restriction',
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+          )
+        else if (status['unavailable_reason'] == 'appeal_cooldown' &&
+            cooldownDays != null)
+          // Countdown until the next appeal opens.
+          Semantics(
+            label: 'Next appeal available in $cooldownDays $dayWord',
+            child: Container(
+              key: const ValueKey('appeal_cooldown_countdown'),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.selectedCardFill,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_bottom, color: AppColors.primaryNavy),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$cooldownDays $dayWord',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          cooldownUntil.isEmpty
+                              ? 'until you can appeal again'
+                              : 'until you can appeal again ($cooldownUntil)',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (canAppeal)
+          const Text(
+            'The waiting period is over. You can submit one more appeal. '
+            'If it is not approved, the next one opens 90 days after that decision.',
+            key: ValueKey('appeal_cycle_available'),
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+          ),
         const SizedBox(height: 12),
         PrimaryButton(
           'Request an appeal',
@@ -386,6 +449,7 @@ class _AppealDialogState extends State<AppealDialog> {
       const stateCodes = [
         'appeal_pending',
         'appeal_limit_reached',
+        'appeal_cooldown',
         'account_active',
       ];
       if (e is PostgrestException && stateCodes.any(e.message.contains)) {

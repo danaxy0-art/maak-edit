@@ -148,6 +148,10 @@ String? validateDismissReason(String? value) =>
 String? validateEndConversationReason(String? value) =>
     _reportDecision(value, 'Explain why this conversation is ended');
 
+/// Same rule as admin_lift_conversation_restriction(): 1-500 after trimming.
+String? validateLiftReason(String? value) =>
+    _reportDecision(value, 'Explain why the restriction is lifted');
+
 String? _reportDecision(String? value, String empty) {
   final v = value?.trim() ?? '';
   if (v.isEmpty) return empty;

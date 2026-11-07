@@ -345,6 +345,9 @@ class ReportDetailPage extends StatefulWidget {
 
 class _ReportDetailPageState extends State<ReportDetailPage> {
   Map<String, dynamic>? _details;
+  // Restriction and lift events for this report's conversation; null when the
+  // lift migration is not installed or the history could not be loaded.
+  List<Map<String, dynamic>>? _restrictionHistory;
   Object? _error;
   bool _loading = true;
   bool _acting = false;
@@ -377,6 +380,18 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
         _details = details;
         _error = null;
       });
+      // Secondary: a failure here never hides the report itself.
+      final requestId = details['request_id'] as String?;
+      if (requestId != null) {
+        try {
+          final history = await SupabaseService.getRestrictionHistory(
+            requestId,
+          ).timeout(const Duration(seconds: 15));
+          if (mounted) setState(() => _restrictionHistory = history);
+        } catch (error) {
+          debugPrint('Restriction history load failed: ${error.runtimeType}');
+        }
+      }
     } catch (error) {
       debugPrint('Report details load failed: ${error.runtimeType}');
       if (mounted) setState(() => _error = error);
@@ -388,6 +403,37 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
   Future<void> _refresh() async {
     setState(() => _loading = true);
     await _fetch();
+  }
+
+  Future<void> _liftRestriction(Map conversation) async {
+    final requestId = _r['request_id'] as String?;
+    if (_acting || requestId == null) return;
+    setState(() => _acting = true);
+    try {
+      final outcome = await showDialog<ModerationOutcome>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => LiftRestrictionDialog(
+          requestId: requestId,
+          participants:
+              '${_memberName(conversation['help_seeker'])} & ${_memberName(conversation['volunteer'])}',
+        ),
+      );
+      if (!mounted || outcome == null) return;
+      if (outcome.stale) {
+        _notice =
+            'This restriction changed elsewhere. The latest status is shown.';
+      } else {
+        _notice = null;
+        showSuccess(
+          context,
+          'Restriction lifted. Both participants were notified.',
+        );
+      }
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
   }
 
   Future<void> _decide({required bool endConversation}) async {
@@ -494,6 +540,11 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
               _section('Reported message', _evidenceCard(d)),
               _section('Conversation context', _contextSection(d)),
               _section('Conversation status', _conversationCard(conversation)),
+              if ((_restrictionHistory ?? const []).isNotEmpty)
+                _section(
+                  'Restriction history',
+                  _restrictionHistorySection(_restrictionHistory!),
+                ),
               if ((d['other_reports'] as List? ?? const []).isNotEmpty)
                 _section(
                   'Other reports in this conversation',
@@ -789,11 +840,49 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
               'Reason shown to participants',
               conversation['restriction_reason'] as String?,
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('lift_restriction_button'),
+              onPressed: _acting || _loading
+                  ? null
+                  : () => _liftRestriction(conversation),
+              icon: const Icon(Icons.lock_open_outlined),
+              label: const Text('Lift restriction'),
+            ),
           ],
         ],
       ),
     );
   }
+
+  Widget _restrictionHistorySection(List<Map<String, dynamic>> events) =>
+      Column(
+        children: [
+          for (final e in events)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ReportHistoryEntry(
+                icon: e['action'] == 'lifted'
+                    ? Icons.lock_open_outlined
+                    : Icons.lock_outline,
+                color: e['action'] == 'lifted'
+                    ? AppColors.success
+                    : AppColors.error,
+                title: () {
+                  final name = (e['actor_name'] as String? ?? '').trim();
+                  final who = e['actor_is_me'] == true && name.isNotEmpty
+                      ? '$name (you)'
+                      : name;
+                  return e['action'] == 'lifted'
+                      ? 'Restriction lifted by $who'
+                      : 'Conversation restricted by $who';
+                }(),
+                date: e['created_at'] as String?,
+                note: e['reason'] as String?,
+              ),
+            ),
+        ],
+      );
 
   Widget _otherReports(List others) => Column(
     children: [
@@ -1044,4 +1133,93 @@ class _ReportDecisionDialogState extends State<ReportDecisionDialog> {
       ),
     );
   }
+}
+
+/// Confirms lifting an administrator restriction, with a required reason that
+/// only administrators see (participants get a generic notice).
+class LiftRestrictionDialog extends StatefulWidget {
+  final String requestId;
+  final String participants;
+  const LiftRestrictionDialog({
+    super.key,
+    required this.requestId,
+    required this.participants,
+  });
+  @override
+  State<LiftRestrictionDialog> createState() => _LiftRestrictionDialogState();
+}
+
+class _LiftRestrictionDialogState extends State<LiftRestrictionDialog> {
+  final _form = GlobalKey<FormState>();
+  final _reason = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    // _busy is set synchronously, so a second tap cannot send a second lift.
+    if (_busy || !_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await SupabaseService.liftConversationRestriction(
+        requestId: widget.requestId,
+        reason: _reason.text,
+      );
+      if (mounted) {
+        Navigator.pop<ModerationOutcome>(context, (stale: false, text: null));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (_isStale(e, const [
+        'conversation_not_restricted',
+        'conversation_unavailable',
+      ])) {
+        Navigator.pop<ModerationOutcome>(context, (stale: true, text: null));
+      } else {
+        setState(() => _error = friendlyError(e));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _ModerationDialog(
+    title: 'Lift this restriction?',
+    message:
+        'They can chat again unless a participant ended the chat or an account is blocked. Both get a notice without your reason.',
+    name: widget.participants,
+    email: 'Conversation participants',
+    confirm: 'Lift restriction',
+    busyConfirm: 'Lifting...',
+    busy: _busy,
+    destructive: false,
+    form: _form,
+    error: _error,
+    onConfirm: _save,
+    field: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const FieldLabel('Reason (admins only)', requiredField: true),
+        _AdminTextField(
+          controller: _reason,
+          maxLines: 4,
+          maxLength: 500,
+          enabled: !_busy,
+          validator: validateLiftReason,
+          decoration: const InputDecoration(
+            hintText: 'For example: Restricted by mistake',
+          ),
+        ),
+      ],
+    ),
+  );
 }

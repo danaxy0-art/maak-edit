@@ -928,7 +928,9 @@ class _ConversationPageState extends State<ConversationPage>
         ) {
           final ids = {
             for (final r in rows)
-              if (r['kind'] == 'restricted' &&
+              // A restriction or its lift for this chat: reload the status.
+              if ((r['kind'] == 'restricted' ||
+                      r['kind'] == 'restriction_lifted') &&
                   r['reference_id'] == widget.requestId)
                 '${r['id']}',
           };
