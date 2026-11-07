@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import '../../backend/models/message_order.dart';
 import 'matching_page.dart';
 import 'feedback.dart'; //add
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -842,6 +844,8 @@ class _ConversationPageState extends State<ConversationPage>
   late Stream<List<Map<String, dynamic>>> _stream;
   String? _lastMessageId;
   String? _sendError;
+  Timer? _sendFeedbackTimer;
+  bool _sendTakingLong = false;
   bool _mediaBusy = false;
   // An attachment is ready: Send sends it, with the typed text as its caption.
   bool _hasMediaDraft = false;
@@ -995,6 +999,7 @@ class _ConversationPageState extends State<ConversationPage>
 
   @override
   void dispose() {
+    _sendFeedbackTimer?.cancel();
     _reopenRefreshTimer?.cancel();
     _statusSubscription?.cancel();
     _reopenNoticeSubscription?.cancel();
@@ -1747,15 +1752,28 @@ class _ConversationPageState extends State<ConversationPage>
         text.length > 2000) {
       return;
     }
+
     setState(() {
       _busy = true;
       _sendError = null;
+      _sendTakingLong = false;
     });
+    _sendFeedbackTimer?.cancel();
+    if (media == null) {
+      _sendFeedbackTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && _busy && !_closed) {
+          setState(() => _sendTakingLong = true);
+        }
+      });
+    }
+
     try {
       if (media != null) {
         // The composer shows its own error and keeps the attachment on failure.
         final sent = await media.sendDraft(caption: text);
-        if (sent && mounted && _input.text.trim() == text) _input.clear();
+        if (sent && mounted && _input.text.trim() == text) {
+          _input.clear();
+        }
         return;
       }
       await SupabaseService.sendMessage(widget.requestId, text);
@@ -1763,16 +1781,20 @@ class _ConversationPageState extends State<ConversationPage>
         _input.clear();
       }
     } catch (_) {
-      await _loadStatus();
+      // Do not wait for another network call before showing the error.
       if (mounted && !_closed) {
-        setState(
-          () => _sendError =
-              'Message not sent. Check your connection and try again.',
-        );
+        setState(() {
+          _sendError = 'Message not sent. Check your connection and try again.';
+        });
       }
     } finally {
+      _sendFeedbackTimer?.cancel();
+      _sendFeedbackTimer = null;
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _sendTakingLong = false;
+        });
       }
     }
   }
@@ -2084,8 +2106,7 @@ class _ConversationPageState extends State<ConversationPage>
                                                   const SizedBox(width: 8),
                                                   Flexible(
                                                     child: Text(
-                                                      m['body']?.toString() ??
-                                                          'This message was deleted.',
+                                                      m['body']?.toString() ?? 'This message was deleted.',
                                                       style: const TextStyle(
                                                         color: MaakColors.muted,
                                                         fontStyle:
@@ -2147,11 +2168,11 @@ class _ConversationPageState extends State<ConversationPage>
                                         spacing: 4,
                                         children: [
                                           for (final emoji in [
-                                            'ظإجي╕',
-                                            '≡اّ',
-                                            '≡اءè',
-                                            '≡اآ',
-                                            '≡اْù',
+                                            '\u2764\uFE0F',
+                                            '\u{1F44D}',
+                                            '\u{1F602}',
+                                            '\u{1F62E}',
+                                            '\u{1F622}',
                                           ])
                                             if (reactions.any(
                                               (r) =>
@@ -2205,7 +2226,7 @@ class _ConversationPageState extends State<ConversationPage>
                                             height: 40,
                                             child: IconButton(
                                               tooltip:
-                                                  'Message options ┬╖ Delete',
+                                                  'Message options آ· Delete',
                                               onPressed: _deletingMessage
                                                   ? null
                                                   : () => _messageOptions(m),
@@ -2257,8 +2278,8 @@ class _ConversationPageState extends State<ConversationPage>
                           Flexible(
                             child: Text(
                               _restricted
-                                  ? 'An administrator ended this chat — you can no longer send messages.'
-                                  : 'Chat ended — you can no longer send messages.',
+                                  ? 'An administrator ended this chat â€” you can no longer send messages.'
+                                  : 'Chat ended â€” you can no longer send messages.',
                               style: const TextStyle(color: MaakColors.muted),
                               textAlign: TextAlign.center,
                             ),
@@ -2281,6 +2302,29 @@ class _ConversationPageState extends State<ConversationPage>
                       onDraftChanged: (value) {
                         if (mounted) setState(() => _hasMediaDraft = value);
                       },
+                    ),
+                  if (!_closed && _sendTakingLong && _sendError == null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: MaakColors.muted,
+                            size: 18,
+                          ),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Still sending. Please check your internet connection.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: MaakColors.muted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   if (!_closed && _sendError != null)
                     Padding(
