@@ -859,20 +859,28 @@ class PairedGrid extends StatelessWidget {
     children: [
       for (var i = 0; i < children.length; i += 2) ...[
         if (i > 0) const SizedBox(height: MaakSpace.md),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: children[i]),
-              const SizedBox(width: MaakSpace.md),
-              Expanded(
-                child: i + 1 < children.length
-                    ? children[i + 1]
-                    : const SizedBox.shrink(),
+        // A lone last card is centred at the same width as the others,
+        // instead of sitting in the left column next to an empty one.
+        if (i + 1 == children.length)
+          LayoutBuilder(
+            builder: (context, constraints) => Center(
+              child: SizedBox(
+                width: (constraints.maxWidth - MaakSpace.md) / 2,
+                child: children[i],
               ),
-            ],
+            ),
+          )
+        else
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: children[i]),
+                const SizedBox(width: MaakSpace.md),
+                Expanded(child: children[i + 1]),
+              ],
+            ),
           ),
-        ),
       ],
     ],
   );

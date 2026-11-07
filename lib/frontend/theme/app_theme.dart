@@ -168,10 +168,17 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: MaakColors.fill,
-        selectedColor: MaakColors.selected,
-        checkmarkColor: MaakColors.ink,
+        // Selected filters use the black button theme with white text.
+        selectedColor: MaakColors.button,
+        checkmarkColor: Colors.white,
         side: const BorderSide(color: MaakColors.border),
-        labelStyle: MaakText.caption.copyWith(color: MaakColors.ink),
+        labelStyle: MaakText.caption.copyWith(
+          color: WidgetStateColor.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? Colors.white
+                : MaakColors.ink,
+          ),
+        ),
         shape: pill,
       ),
       switchTheme: SwitchThemeData(
@@ -205,12 +212,17 @@ class AppTheme {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
+          // Selected filters use the black button theme with white text.
           backgroundColor: WidgetStateProperty.resolveWith(
             (s) => s.contains(WidgetState.selected)
-                ? MaakColors.selected
+                ? MaakColors.button
                 : MaakColors.surface,
           ),
-          foregroundColor: const WidgetStatePropertyAll(MaakColors.ink),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? Colors.white
+                : MaakColors.ink,
+          ),
           side: const WidgetStatePropertyAll(
             BorderSide(color: AppColors.fieldBorder),
           ),

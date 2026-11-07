@@ -56,26 +56,17 @@ class _MatchingPageState extends State<MatchingPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(width: 340, child: _intro()),
+                const SizedBox(width: 340, child: _MatchingIntro(large: true)),
                 const SizedBox(width: MaakSpace.xxl),
                 Expanded(child: _results(wide)),
               ],
             ),
           ]
-        : [_intro(), const SizedBox(height: MaakSpace.xxl), _results(wide)],
-  );
-
-  Widget _intro() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Semantics(
-        header: true,
-        child: Text(
-          'Support that understands you',
-          style: MaakText.greeting.copyWith(fontSize: 26),
-        ),
-      ),
-    ],
+        : [
+            const _MatchingIntro(),
+            const SizedBox(height: MaakSpace.xl),
+            _results(wide),
+          ],
   );
 
   Widget _results(bool wide) => FutureBuilder<Map<String, dynamic>>(
@@ -132,6 +123,15 @@ class _MatchingPageState extends State<MatchingPage> {
         for (final row in matches)
           _MatchCard(match: row, onTap: () => _open(row)),
       ];
+      // On tablets the first heading lines up with the top of the intro card
+      // beside it, so it gets no extra space above it.
+      final startsWithMessage =
+          (own.isEmpty && data['mode'] != 'general') || matches.isEmpty;
+      final firstTop = wide ? 0.0 : MaakSpace.xxl;
+      final coverageTop = startsWithMessage ? MaakSpace.xxl : firstTop;
+      final rankedTop = team.isEmpty && missing.isEmpty && !startsWithMessage
+          ? firstTop
+          : MaakSpace.xxl;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -155,7 +155,7 @@ class _MatchingPageState extends State<MatchingPage> {
             ),
           ],
           if (team.isNotEmpty) ...[
-            const SectionHeader('Coverage suggestions'),
+            SectionHeader('Coverage suggestions', top: coverageTop),
             _CoverageCard(team: team, matches: matches, onOpen: _open),
           ],
           if (missing.isNotEmpty) ...[
@@ -168,7 +168,7 @@ class _MatchingPageState extends State<MatchingPage> {
           if (matches.isNotEmpty) ...[
             // One column even on tablets: the results column beside the
             // controls is too narrow for two readable cards.
-            const SectionHeader('Ranked volunteers'),
+            SectionHeader('Ranked volunteers', top: rankedTop),
             for (final (i, card) in cards.indexed) ...[
               if (i > 0) const SizedBox(height: MaakSpace.md),
               card,
@@ -202,8 +202,74 @@ class _MatchingPageState extends State<MatchingPage> {
   }
 }
 
-/// The AI opt-in. The whole card toggles the switch; the privacy text is
-/// read together with the switch state by screen readers.
+/// Colourful intro beside (tablet) or above (phone) the results: what the
+/// page is and how matches are ranked, in the app's glowing hero style.
+class _MatchingIntro extends StatelessWidget {
+  final bool large;
+  const _MatchingIntro({this.large = false});
+
+  static const _points = [
+    (
+      Icons.favorite_border,
+      'Volunteers who share more of your conditions come first',
+    ),
+    (Icons.auto_awesome, 'AI also compares experience descriptions'),
+    (Icons.front_hand_outlined, 'You decide whether to send a request'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.all(large ? MaakSpace.xxl : MaakSpace.xl),
+    decoration: BoxDecoration(
+      gradient: MaakGradients.orb,
+      borderRadius: BorderRadius.circular(MaakRadius.hero),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconBadge(
+          Icons.volunteer_activism_outlined,
+          size: large ? 52 : 44,
+          color: const Color(0xC0FFFFFF),
+        ),
+        SizedBox(height: large ? MaakSpace.lg : MaakSpace.md),
+        Semantics(
+          header: true,
+          child: Text(
+            'Support that understands you',
+            style: MaakText.greeting.copyWith(fontSize: large ? 26 : 22),
+          ),
+        ),
+        const SizedBox(height: MaakSpace.sm),
+        Text(
+          'Volunteers matched to the chronic conditions in your profile.',
+          style: MaakText.body.copyWith(color: MaakColors.onHero),
+        ),
+        SizedBox(height: large ? MaakSpace.xl : MaakSpace.lg),
+        for (final (i, (icon, text)) in _points.indexed) ...[
+          if (i > 0) const SizedBox(height: MaakSpace.sm),
+          Row(
+            children: [
+              IconBadge(icon, size: 30, color: const Color(0x99FFFFFF)),
+              const SizedBox(width: MaakSpace.md),
+              Expanded(
+                child: Text(
+                  text,
+                  style: MaakText.body.copyWith(
+                    color: MaakColors.ink,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
 /// Volunteers who together cover the member's conditions.
 class _CoverageCard extends StatelessWidget {
   final List<Map<String, dynamic>> team, matches;
