@@ -1080,7 +1080,7 @@ class _ConversationPageState extends State<ConversationPage>
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Reopening this conversation requires your peerظآs approval.',
+                   "Reopening this conversation requires your peer's approval.",
                     style: TextStyle(
                       color: _dangerColor,
                       fontWeight: FontWeight.w600,
@@ -1220,7 +1220,7 @@ class _ConversationPageState extends State<ConversationPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Reopen request sent. Waiting for your peerظآs response.',
+'Reopen request sent. Waiting for your peer\'s response.',
           ),
         ),
       );
@@ -1231,7 +1231,7 @@ class _ConversationPageState extends State<ConversationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'A reopen request is still pending. Please wait for your peerظآs response.',
+'A reopen request is still pending. Please wait for your peer\'s response.',
             ),
           ),
         );
@@ -1415,7 +1415,7 @@ class _ConversationPageState extends State<ConversationPage>
                 Text('Reopen requests: $attempts of 3'),
                 const SizedBox(height: 6),
                 const Text(
-                  'Reopen request pending your peerظآs approval.',
+                  "Reopen request pending your peer's approval.",
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1557,7 +1557,13 @@ class _ConversationPageState extends State<ConversationPage>
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
-                children: ['ظإجي╕', '≡اّ', '≡اءè', '≡اآ', '≡اْù']
+                children: [
+  '\u2764\uFE0F',
+  '\u{1F44D}',
+  '\u{1F602}',
+  '\u{1F62E}',
+  '\u{1F622}',
+]
                     .map(
                       (emoji) => Semantics(
                         label: 'React with $emoji',
@@ -2316,7 +2322,6 @@ class _ConversationPageState extends State<ConversationPage>
                               hintText: _hasMediaDraft
                                   ? 'Add a caption (optional)...'
                                   : 'Write a message...',
-                              counterText: '',
                               filled: true,
                               fillColor: MaakColors.blush,
                               border: OutlineInputBorder(
