@@ -1080,7 +1080,7 @@ class _ConversationPageState extends State<ConversationPage>
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Reopening this conversation requires your peer’s approval.',
+                    'Reopening this conversation requires your peerظآs approval.',
                     style: TextStyle(
                       color: _dangerColor,
                       fontWeight: FontWeight.w600,
@@ -1220,7 +1220,7 @@ class _ConversationPageState extends State<ConversationPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Reopen request sent. Waiting for your peer’s response.',
+            'Reopen request sent. Waiting for your peerظآs response.',
           ),
         ),
       );
@@ -1231,7 +1231,7 @@ class _ConversationPageState extends State<ConversationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'A reopen request is still pending. Please wait for your peer’s response.',
+              'A reopen request is still pending. Please wait for your peerظآs response.',
             ),
           ),
         );
@@ -1239,7 +1239,7 @@ class _ConversationPageState extends State<ConversationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'You’ve reached the maximum of 3 reopen requests for this closure.',
+              'Youظآve reached the maximum of 3 reopen requests for this closure.',
             ),
           ),
         );
@@ -1415,7 +1415,7 @@ class _ConversationPageState extends State<ConversationPage>
                 Text('Reopen requests: $attempts of 3'),
                 const SizedBox(height: 6),
                 const Text(
-                  'Reopen request pending your peer’s approval.',
+                  'Reopen request pending your peerظآs approval.',
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1480,7 +1480,7 @@ class _ConversationPageState extends State<ConversationPage>
               Text('Reopen requests: 3 of 3', textAlign: TextAlign.center),
               SizedBox(height: 6),
               Text(
-                'You’ve reached the maximum of 3 reopen requests for this closure.',
+                'Youظآve reached the maximum of 3 reopen requests for this closure.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -1557,7 +1557,7 @@ class _ConversationPageState extends State<ConversationPage>
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
-                children: ['❤️', '👍', '😊', '🙏', '💗']
+                children: ['ظإجي╕', '≡اّ', '≡اءè', '≡اآ', '≡اْù']
                     .map(
                       (emoji) => Semantics(
                         label: 'React with $emoji',
@@ -1705,13 +1705,14 @@ class _ConversationPageState extends State<ConversationPage>
           message['id'].toString(),
           forEveryone: everyone,
         );
-        if (mounted)
+        if (mounted) {
           showSuccess(
             context,
             everyone
                 ? 'Message deleted for everyone.'
                 : 'Message deleted for you.',
           );
+        }
       } catch (error) {
         if (mounted) showAppError(context, error);
       } finally {
@@ -2134,11 +2135,11 @@ class _ConversationPageState extends State<ConversationPage>
                                         spacing: 4,
                                         children: [
                                           for (final emoji in [
-                                            '❤️',
-                                            '👍',
-                                            '😊',
-                                            '🙏',
-                                            '💗',
+                                            'ظإجي╕',
+                                            '≡اّ',
+                                            '≡اءè',
+                                            '≡اآ',
+                                            '≡اْù',
                                           ])
                                             if (reactions.any(
                                               (r) =>
@@ -2192,7 +2193,7 @@ class _ConversationPageState extends State<ConversationPage>
                                             height: 40,
                                             child: IconButton(
                                               tooltip:
-                                                  'Message options · Delete',
+                                                  'Message options ┬╖ Delete',
                                               onPressed: _deletingMessage
                                                   ? null
                                                   : () => _messageOptions(m),
@@ -2595,24 +2596,23 @@ class _RequestCard extends StatelessWidget {
             ),
           ],
           if (status == 'accepted') ...[
-            const SizedBox(height: MaakSpace.md),
-            PillButton(
-              'Open conversation',
-              icon: Icons.chat_bubble_outline,
-              compact: true,
-              onPressed: () => ConversationPage.open(
-                context,
-                requestId: request['id'] as String,
-                name: name,
-              ),
-            ),
-          ],
+  const SizedBox(height: MaakSpace.md),
+  PrimaryButton(
+    'Open conversation',
+    icon: Icons.chat_bubble_outline,
+    onPressed: () => ConversationPage.open(
+      context,
+      requestId: request['id'] as String,
+      name: name,
+    ),
+  ),
+],
         ],
       ),
     );
   }
 }
-// اضافه جديده
+// ╪د╪╢╪د┘┘ç ╪ش╪»┘è╪»┘ç
 
 class CancelRequestButton extends StatefulWidget {
   final String requestId;
@@ -2689,7 +2689,7 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
     onPressed: _busy ? null : _cancel,
   );
 }
-// هنا تنتهي
+// ┘ç┘╪د ╪ز┘╪ز┘ç┘è
 
 class ResourcesPage extends StatelessWidget {
   const ResourcesPage({super.key});
@@ -2733,7 +2733,7 @@ class ResourcesPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Read resource →',
+            'Read resource ظْ',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -2750,5 +2750,5 @@ String formatDate(String date) {
       : d.hour > 12
       ? d.hour - 12
       : d.hour;
-  return '${d.day}/${d.month}/${d.year} · $hour:$minutes ${d.hour >= 12 ? 'PM' : 'AM'}';
+  return '${d.day}/${d.month}/${d.year} ┬╖ $hour:$minutes ${d.hour >= 12 ? 'PM' : 'AM'}';
 }
