@@ -178,12 +178,26 @@ void main() {
       });
     }
 
-    testScreen('reactions are not offered for messages', (t) async {
+    testScreen('reactions and deleting are not offered for messages', (
+      t,
+    ) async {
       await open(t, restricted: true);
       await t.tap(find.byTooltip('Message options · Delete'));
       await settle(t);
       expect(find.text('Message options'), findsOneWidget);
       expect(find.text('React'), findsNothing);
+      expect(find.text('Delete for me'), findsNothing);
+      expect(find.text('Delete for everyone'), findsNothing);
+      // Reporting the other person's message stays available.
+      expect(find.text('Report message'), findsOneWidget);
+    });
+
+    testScreen('a participant-ended chat still offers Delete for me', (
+      t,
+    ) async {
+      await open(t, endedByMe: true);
+      await t.tap(find.byTooltip('Message options · Delete'));
+      await settle(t);
       expect(find.text('Delete for me'), findsOneWidget);
     });
 

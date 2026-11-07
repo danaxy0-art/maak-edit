@@ -20,6 +20,9 @@ class MaakColors {
   static const blush = Color(0xFFFFEFEF);
   static const selected = Color(0xFFFED8D5);
   static const fill = Color(0xFFF4F1F1);
+
+  /// Neutral grey for every pending / awaiting status chip.
+  static const pending = Color(0xFFE6E6E6);
   static const border = Color(0xFFF1E4E4);
 
   static const coral = Color(0xFFF38184);

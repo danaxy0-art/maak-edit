@@ -763,7 +763,7 @@ class _AppealDecisionChip extends StatelessWidget {
     'rejected' => 'Rejected',
     'closed' => 'Closed',
     _ => 'Unknown',
-  }, error: status == 'rejected');
+  }, error: status == 'rejected', pending: status == 'pending');
 }
 
 /// Approve (optional note) or reject (required note) one appeal.

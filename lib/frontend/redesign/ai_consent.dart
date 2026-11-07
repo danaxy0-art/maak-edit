@@ -6,6 +6,7 @@ import '../design/tokens.dart';
 void showAiMatchingDetails(BuildContext context) => showDialog<void>(
   context: context,
   builder: (context) => AlertDialog(
+    actionsAlignment: MainAxisAlignment.center,
     title: const Text('AI matching details'),
     content: const SingleChildScrollView(
       child: Text(
@@ -97,6 +98,7 @@ Future<bool> requestAiMatchingActivation(BuildContext context) async {
   final accepted = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       backgroundColor: MaakColors.surface,
       icon: const Icon(Icons.auto_awesome, color: MaakColors.ink, size: 32),
       title: const Text('Activate AI matching'),
@@ -183,6 +185,7 @@ class _AiMatchingSettingsState extends State<AiMatchingSettings> {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
+            actionsAlignment: MainAxisAlignment.center,
             title: const Text('Turn off AI matching?'),
             content: const Text(
               'You will not be able to find new matches or appear as an available volunteer until you turn it on again. Your existing chats stay available.',

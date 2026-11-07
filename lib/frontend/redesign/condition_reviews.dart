@@ -179,6 +179,7 @@ class _ReviewConditionDialogState extends State<_ReviewConditionDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       title: const Text('Review condition request'),
       content: SingleChildScrollView(
         child: Form(

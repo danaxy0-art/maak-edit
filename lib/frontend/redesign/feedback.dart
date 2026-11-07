@@ -171,6 +171,7 @@ void showAppError(
     retryRequested = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
         icon: const IconBadge(
           Icons.error_outline,
           size: 56,

@@ -20,10 +20,46 @@ const kReportReasons = <(String, String)>[
 const kReportDescriptionMax = 500;
 
 /// Opens the report dialog. Shows a success message when the report was sent.
+/// If this member already reported the message, explains that instead of
+/// opening the form. [alreadyReported] is a test hook for that lookup.
 Future<void> showReportMessageDialog(
   BuildContext context, {
   required String messageId,
+  Future<bool> Function()? alreadyReported,
 }) async {
+  var reported = false;
+  try {
+    reported =
+        await (alreadyReported ??
+            () => SupabaseService.hasReportedMessage(messageId))();
+  } catch (_) {
+    // Lookup failed: open the form; the server still refuses duplicates.
+  }
+  if (!context.mounted) return;
+  if (reported) {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
+        backgroundColor: MaakColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text('Already reported', style: MaakText.cardTitle),
+        content: const Text(
+          'You already reported this message. An admin will review it.',
+          key: ValueKey('already_reported_notice'),
+          style: MaakText.body,
+        ),
+        actions: [
+          PillButton(
+            'OK',
+            compact: true,
+            onPressed: () => Navigator.pop(dialogContext),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
   final sent = await showDialog<bool>(
     context: context,
     builder: (_) => ReportMessageDialog(messageId: messageId),
@@ -97,6 +133,7 @@ class _ReportMessageDialogState extends State<ReportMessageDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    actionsAlignment: MainAxisAlignment.center,
     backgroundColor: MaakColors.surface,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
     title: const Text('Report this message', style: MaakText.cardTitle),

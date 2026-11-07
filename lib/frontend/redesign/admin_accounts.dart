@@ -371,7 +371,7 @@ class _AccountCard extends StatelessWidget {
                     _AccountStatusChip(blocked: blocked),
                     RoleChip(_roleLabel(account['role'] as String?)),
                     if (account['pending_appeal'] != null)
-                      const RoleChip('Appeal pending'),
+                      const RoleChip('Appeal pending', pending: true),
                   ],
                 ),
                 // A two-line preview; the full reason is on the detail page.
@@ -998,6 +998,7 @@ class _ModerationDialog extends StatelessWidget {
   Widget build(BuildContext context) => PopScope(
     canPop: !busy,
     child: AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       scrollable: true,
       title: Text(title),
       content: Form(

@@ -624,7 +624,7 @@ class RequestsPage extends StatelessWidget {
                         _ => Icons.close,
                       },
                       color: switch (row['status']) {
-                        'pending' => MaakColors.blush,
+                        'pending' => MaakColors.pending,
                         'accepted' => MaakColors.selected,
                         _ => MaakColors.fill,
                       },
@@ -993,6 +993,7 @@ class _ConversationPageState extends State<ConversationPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
         backgroundColor: MaakColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Row(
@@ -1095,6 +1096,7 @@ class _ConversationPageState extends State<ConversationPage>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
         title: const Row(
           children: [
             Icon(
@@ -1199,6 +1201,7 @@ class _ConversationPageState extends State<ConversationPage>
       final confirm = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          actionsAlignment: MainAxisAlignment.center,
           title: const Text('Reopen this conversation?'),
           content: const Text(
             'If you agree, both participants can send messages again.',
@@ -1564,13 +1567,15 @@ class _ConversationPageState extends State<ConversationPage>
                   onTap: () => Navigator.pop(context, 'report'),
                 ),
               // === END ADDED ===
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete for me'),
-                subtitle: const Text('The other person keeps this message.'),
-                onTap: () => Navigator.pop(context, 'me'),
-              ),
-              if (mine && !deleted)
+              // An administrator-ended chat is kept as it was: no deleting.
+              if (!_restricted)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Delete for me'),
+                  subtitle: const Text('The other person keeps this message.'),
+                  onTap: () => Navigator.pop(context, 'me'),
+                ),
+              if (mine && !deleted && !_restricted)
                 ListTile(
                   leading: const Icon(
                     Icons.delete_forever,
@@ -1609,10 +1614,13 @@ class _ConversationPageState extends State<ConversationPage>
         return;
       }
       // === END ADDED ===
+      // The chat may have been restricted while the sheet was open.
+      if (_restricted) return;
       final everyone = action == 'everyone';
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          actionsAlignment: MainAxisAlignment.center,
           icon: const Icon(Icons.delete_outline, color: _dangerColor, size: 32),
           title: Text(everyone ? 'Delete for everyone?' : 'Delete for you?'),
           content: Text(
@@ -2437,7 +2445,7 @@ class _RequestCard extends StatelessWidget {
     final sent = formatDay(request['created_at'] as String?);
         // ADDED: distinct colour per state
     final (label, icon, color) = switch (status) {
-      'pending' => ('Awaiting response', Icons.schedule, const Color(0xFFFFE9A8)),
+      'pending' => ('Awaiting response', Icons.schedule, MaakColors.pending),
       'accepted' => ('Connected', Icons.check, const Color(0xFFCDEFD8)),
       'canceled' => ('Canceled', Icons.block, const Color(0xFFE3E5E8)),
       _ => ('Declined', Icons.close, const Color(0xFFFAC9C9)),
@@ -2531,6 +2539,7 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
     final sure = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
         backgroundColor: MaakColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: const Text('Cancel this request?', style: MaakText.cardTitle),

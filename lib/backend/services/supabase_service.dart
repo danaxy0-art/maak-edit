@@ -998,6 +998,17 @@ class SupabaseService {
       'p_description': description,
     },
   );
+
+  /// Whether the signed-in member already reported this message. Uses the
+  /// reporter's own-rows read policy (reports_read_own).
+  static Future<bool> hasReportedMessage(String messageId) async =>
+      await client
+          .from('reports')
+          .select('id')
+          .eq('message_id', messageId)
+          .eq('reporter_id', userId)
+          .maybeSingle() !=
+      null;
   // === END ADDED ===
 
   static Future<void> cancelRequest(String id) async =>

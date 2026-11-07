@@ -880,6 +880,7 @@ class _ConditionDialogState extends State<_ConditionDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       title: Text(
         widget.condition == null ? 'Add condition' : 'Edit condition',
       ),
@@ -1276,6 +1277,7 @@ class _RejectApplicationDialogState extends State<RejectApplicationDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       title: const Text('Reject application'),
       content: SingleChildScrollView(
         child: Form(
@@ -1332,7 +1334,11 @@ class _AdminStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (status != 'approved') {
-      return RoleChip(_statusLabel(status), error: status == 'rejected');
+      return RoleChip(
+        _statusLabel(status),
+        error: status == 'rejected',
+        pending: status == 'pending_review',
+      );
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),

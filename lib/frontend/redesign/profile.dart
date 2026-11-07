@@ -64,6 +64,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
+            actionsAlignment: MainAxisAlignment.center,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
@@ -471,6 +472,7 @@ Future<void> logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.center,
         icon: const Icon(Icons.logout, color: AppColors.primaryNavy),
         title: const Text('Log out?'),
         content: const Text("Are you sure you want to log out of Ma'ak?"),

@@ -380,12 +380,24 @@ class HeroCard extends StatelessWidget {
 class RoleChip extends StatelessWidget {
   final String label;
   final bool error;
-  const RoleChip(this.label, {super.key, this.error = false});
+
+  /// Grey style for pending / awaiting states.
+  final bool pending;
+  const RoleChip(
+    this.label, {
+    super.key,
+    this.error = false,
+    this.pending = false,
+  });
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-      color: error ? const Color(0xFFFDE8E8) : MaakColors.selected,
+      color: error
+          ? const Color(0xFFFDE8E8)
+          : pending
+          ? MaakColors.pending
+          : MaakColors.selected,
       borderRadius: BorderRadius.circular(MaakRadius.pill),
     ),
     child: Text(

@@ -342,6 +342,14 @@ void main() {
       expect(find.text('Spam'), findsOneWidget);
       expect(find.text('Harassment'), findsNothing);
       expect(find.text('Dismissed'), findsOneWidget);
+      // Dismissed reads as resolved: the soft success green.
+      final chip = tester.widget<Container>(
+        find.byKey(const ValueKey('report_status_dismissed')),
+      );
+      expect(
+        (chip.decoration as BoxDecoration).color,
+        AppColors.success.withValues(alpha: 0.10),
+      );
       await tester.tap(find.byKey(const ValueKey('report_filter_ended')));
       await tester.pumpAndSettle();
       expect(find.text('Unwanted medical advice'), findsOneWidget);
@@ -530,7 +538,10 @@ void main() {
       await tester.tap(find.text('Dismiss report'));
       await tester.pumpAndSettle();
       expect(find.text('Dismiss this report?'), findsOneWidget);
-      expect(find.textContaining('Only administrators see'), findsOneWidget);
+      expect(
+        find.textContaining('Only admins see your reason.'),
+        findsOneWidget,
+      );
       await tester.tap(confirm('Dismiss report'));
       await tester.pumpAndSettle();
       expect(find.text('Explain why this report is dismissed'), findsOneWidget);
@@ -638,8 +649,17 @@ void main() {
       expect(find.text('End this conversation?'), findsOneWidget);
       expect(find.textContaining('no account is blocked'), findsOneWidget);
       expect(
-        find.textContaining('All 2 open reports on this conversation'),
+        find.textContaining('Resolves all 2 open reports here.'),
         findsOneWidget,
+      );
+      expect(
+        find.text("Don't name the reporter or include health details."),
+        findsOneWidget,
+      );
+      // Dialog buttons are centred.
+      expect(
+        tester.widget<AlertDialog>(find.byType(AlertDialog)).actionsAlignment,
+        MainAxisAlignment.center,
       );
       expect(
         find.textContaining(

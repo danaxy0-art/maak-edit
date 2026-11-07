@@ -344,7 +344,7 @@ class _AppealStatusChip extends StatelessWidget {
     'rejected' => 'Rejected',
     'closed' => 'Closed',
     _ => 'Unknown',
-  }, error: status == 'rejected');
+  }, error: status == 'rejected', pending: status == 'pending');
 }
 
 /// Collects the appeal explanation. Pops the new appeal status on success, or
@@ -400,6 +400,7 @@ class _AppealDialogState extends State<AppealDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
+      actionsAlignment: MainAxisAlignment.center,
       scrollable: true,
       title: const Text('Request an appeal'),
       content: Form(

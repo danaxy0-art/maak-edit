@@ -42,13 +42,39 @@ class _ReportStatusChip extends StatelessWidget {
   const _ReportStatusChip(this.status);
 
   @override
-  Widget build(BuildContext context) => RoleChip(switch (status) {
-    'open' => 'Open',
-    'dismissed' => 'Dismissed',
-    'conversation_ended' => 'Conversation ended',
-    'reviewed' => 'Reviewed',
-    _ => 'Unknown',
-  }, error: status == 'conversation_ended');
+  Widget build(BuildContext context) {
+    // Dismissed = reviewed, no action needed: the same soft green as an
+    // approved application, so it reads as resolved next to grey Open and
+    // red Conversation ended.
+    if (status == 'dismissed') {
+      return Container(
+        key: const ValueKey('report_status_dismissed'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: const Text(
+          'Dismissed',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.success,
+          ),
+        ),
+      );
+    }
+    return RoleChip(
+      switch (status) {
+        'open' => 'Open',
+        'conversation_ended' => 'Conversation ended',
+        'reviewed' => 'Reviewed',
+        _ => 'Unknown',
+      },
+      error: status == 'conversation_ended',
+      pending: status == 'open',
+    );
+  }
 }
 
 class ReportsAdminPage extends StatefulWidget {
@@ -972,13 +998,13 @@ class _ReportDecisionDialogState extends State<ReportDecisionDialog> {
   Widget build(BuildContext context) {
     final end = widget.endConversation;
     final others = widget.openReports > 1
-        ? ' All ${widget.openReports} open reports on this conversation will be resolved.'
+        ? ' Resolves all ${widget.openReports} open reports here.'
         : '';
     return _ModerationDialog(
       title: end ? 'End this conversation?' : 'Dismiss this report?',
       message: end
-          ? "Neither participant will be able to send messages or reopen the conversation. Existing messages are kept and no account is blocked.$others Both participants are notified and will see your reason, so don't mention who reported it or include health details."
-          : 'The report is closed without any action. The conversation and both accounts are not affected. Only administrators see this reason.',
+          ? 'Both participants can no longer chat or reopen it. Messages are kept; no account is blocked.$others'
+          : 'No action is taken and the conversation stays open. Only admins see your reason.',
       name: widget.reportedName,
       email: end ? 'Conversation with the reported member' : 'Reported member',
       confirm: end ? 'End conversation' : 'Dismiss report',
@@ -1007,6 +1033,11 @@ class _ReportDecisionDialogState extends State<ReportDecisionDialog> {
               hintText: end
                   ? 'For example: Repeated harassment in this conversation'
                   : 'For example: No rule was broken',
+              // Both participants see this reason in their notification.
+              helperText: end
+                  ? "Don't name the reporter or include health details."
+                  : null,
+              helperMaxLines: 2,
             ),
           ),
         ],
