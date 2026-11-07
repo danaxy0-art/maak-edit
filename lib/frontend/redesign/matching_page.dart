@@ -75,37 +75,6 @@ class _MatchingPageState extends State<MatchingPage> {
           style: MaakText.greeting.copyWith(fontSize: 26),
         ),
       ),
-      const SizedBox(height: MaakSpace.sm),
-      const Text(
-        'One shared condition is enough. Different volunteers can support you with different conditions.',
-        style: MaakText.body,
-      ),
-      const SizedBox(height: MaakSpace.xs),
-      Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: TextButton.icon(
-          style: TextButton.styleFrom(
-            foregroundColor: MaakColors.ink,
-            minimumSize: const Size(44, 44),
-            padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
-            textStyle: MaakText.button.copyWith(fontSize: 14),
-          ),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute<void>(builder: (_) => const ConversationsPage()),
-          ),
-          icon: const Icon(Icons.chat_bubble_outline, size: 18),
-          label: const Text('View existing conversations'),
-        ),
-      ),
-      const SizedBox(height: MaakSpace.sm),
-      const SizedBox(height: MaakSpace.lg),
-      PillButton(
-        'Find matches',
-        icon: Icons.auto_awesome,
-        expand: true,
-        onPressed: _reload,
-      ),
     ],
   );
 
@@ -166,32 +135,7 @@ class _MatchingPageState extends State<MatchingPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          StateMessage(
-            title: data['mode'] == 'general'
-                ? 'General volunteer suggestions'
-                : data['mode'] == 'ai'
-                ? 'AI experience comparison active'
-                : 'Condition-based matching',
-            message: data['mode'] == 'ai'
-                ? 'Based on shared conditions and similar experiences.'
-                : 'Based on shared conditions and available volunteers.',
-            icon: Icons.info_outline,
-          ),
-          if (own.isNotEmpty) ...[
-            const SizedBox(height: MaakSpace.lg),
-            const Text('Your conditions', style: MaakText.caption),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final c in own)
-                  ConditionChip('${c['name']}', shared: true),
-              ],
-            ),
-          ],
           if (own.isEmpty && data['mode'] != 'general') ...[
-            const SizedBox(height: MaakSpace.md),
             const StateMessage(
               title: 'Add your chronic conditions',
               message: 'Edit your profile to select at least one condition.',
@@ -312,7 +256,10 @@ class _CoverageCard extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      InitialsAvatar(initials(name)),
+                      InitialsAvatar(
+                        initials(name),
+                        userId: row['user_id'] as String?,
+                      ),
                       const SizedBox(width: MaakSpace.md),
                       Expanded(
                         child: Column(
@@ -356,7 +303,10 @@ class _MatchCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              InitialsAvatar(initials(name)),
+              InitialsAvatar(
+                initials(name),
+                userId: match['user_id'] as String?,
+              ),
               const SizedBox(width: MaakSpace.md),
               Expanded(
                 child: Column(

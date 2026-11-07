@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../design/tokens.dart';
 
@@ -22,6 +23,17 @@ class AppColors {
 }
 
 class AppTheme {
+  /// Phone status bar and Android navigation bar: transparent, with dark icons
+  /// so the clock and battery stay readable on the light Ma'ak backgrounds.
+  static const systemBars = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark, // Android
+    statusBarBrightness: Brightness.light, // iOS
+    systemNavigationBarColor: MaakColors.canvasBottom,
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarDividerColor: Colors.transparent,
+  );
+
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
       seedColor: MaakColors.coral,
@@ -67,6 +79,8 @@ class AppTheme {
         iconTheme: IconThemeData(color: MaakColors.icon),
         centerTitle: false,
         titleTextStyle: MaakText.pageTitle,
+        // Screens with an AppBar would otherwise pick their own status bar style.
+        systemOverlayStyle: systemBars,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

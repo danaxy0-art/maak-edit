@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
+import '../widgets/user_photo.dart';
 
 // Building blocks for the redesigned screens. Every padding and alignment is
 // directional so layouts mirror correctly in right-to-left locales.
@@ -353,9 +354,16 @@ class ActionRow extends StatelessWidget {
 
 class InitialsAvatar extends StatelessWidget {
   final String initials;
-  const InitialsAvatar(this.initials, {super.key});
+
+  /// When set, that user's profile picture replaces the initials.
+  final String? userId;
+  const InitialsAvatar(this.initials, {super.key, this.userId});
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => userId == null
+      ? _circle()
+      : UserPhoto(userId: userId, size: 48, child: _circle());
+
+  Widget _circle() => Container(
     width: 48,
     height: 48,
     alignment: Alignment.center,
@@ -378,8 +386,12 @@ class InitialsAvatar extends StatelessWidget {
 class PersonPreviewCard extends StatelessWidget {
   final String initials, name, message;
   final VoidCallback onTap;
+
+  /// When set, that user's profile picture replaces the initials.
+  final String? userId;
   const PersonPreviewCard({
     super.key,
+    this.userId,
     required this.initials,
     required this.name,
     required this.message,
@@ -396,7 +408,7 @@ class PersonPreviewCard extends StatelessWidget {
     ),
     child: Row(
       children: [
-        InitialsAvatar(initials),
+        InitialsAvatar(initials, userId: userId),
         const SizedBox(width: MaakSpace.md),
         Expanded(
           child: Column(

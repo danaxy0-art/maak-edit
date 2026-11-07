@@ -28,7 +28,14 @@ class ChatAttachment {
 class ChatMediaService {
   static const bucket = 'chat-media';
   // A stable message ID makes a retry after a lost response safe.
-  static Future<void> send(String requestId, ChatAttachment attachment) async {
+  /// [caption] is optional text sent with the attachment (up to 2000 chars).
+  static Future<void> send(
+    String requestId,
+    ChatAttachment attachment, {
+    String caption = '',
+  }) async {
+    final text = caption.trim();
+    if (text.length > 2000) throw ArgumentError('Caption is too long.');
     final client = SupabaseService.client;
     final me = SupabaseService.userId;
     final path = '$requestId/$me/${attachment.id}.${attachment.extension}';
@@ -66,11 +73,7 @@ class ChatMediaService {
         'id': attachment.id,
         'request_id': requestId,
         'sender_id': me,
-        'body': attachment.kind == 'image'
-            ? 'Photo'
-            : attachment.kind == 'video'
-            ? 'Video'
-            : 'Voice message',
+        'body': text.isNotEmpty ? text : chatMediaDefaultBody(attachment.kind),
         'message_type': attachment.kind,
         'attachment_path': path,
         'attachment_mime': attachment.mime,

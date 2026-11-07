@@ -3,6 +3,22 @@ import 'dart:typed_data';
 const chatMediaLimit = 10 * 1024 * 1024;
 const voiceSecondsLimit = 60;
 
+/// Body stored for a media message sent without a caption (and for every
+/// media message sent before captions existed).
+const chatMediaDefaultBodies = {'Photo', 'Video', 'Voice message'};
+
+String chatMediaDefaultBody(String kind) => kind == 'image'
+    ? 'Photo'
+    : kind == 'video'
+    ? 'Video'
+    : 'Voice message';
+
+/// The caption of a media message, or null when it has none.
+String? chatMediaCaption(Object? body) {
+  final text = body?.toString().trim() ?? '';
+  return text.isEmpty || chatMediaDefaultBodies.contains(text) ? null : text;
+}
+
 String imageMime(Uint8List bytes) {
   if (bytes.length < 12 || bytes.length > chatMediaLimit) {
     throw ArgumentError('Choose a PNG, JPEG or WebP image up to 10 MB.');

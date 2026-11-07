@@ -381,21 +381,46 @@ class RoleChip extends StatelessWidget {
   final String label;
   final bool error;
   const RoleChip(this.label, {super.key, this.error = false});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-      color: error ? const Color(0xFFFDE8E8) : MaakColors.selected,
-      borderRadius: BorderRadius.circular(MaakRadius.pill),
-    ),
-    child: Text(
-      label,
-      style: MaakText.caption.copyWith(
-        fontWeight: FontWeight.w600,
-        color: error ? const Color(0xFFB0222A) : MaakColors.ink,
-      ),
-    ),
+
+  // Role badges get their own tint from the Ma'ak palette so volunteers and
+  // help seekers are easy to tell apart; every other chip keeps the default.
+  static const _volunteer = (
+    background: MaakColors.orbPeach, // #FDDFC5
+    text: Color(0xFF8A4B1F),
   );
+  static const _helpSeeker = (
+    background: MaakColors.orbPink, // #FFD3E5
+    text: Color(0xFF8E2457),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final role = error
+        ? null
+        : switch (label) {
+            'Volunteer' => _volunteer,
+            'Help seeker' => _helpSeeker,
+            _ => null,
+          };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: error
+            ? const Color(0xFFFDE8E8)
+            : role?.background ?? MaakColors.selected,
+        borderRadius: BorderRadius.circular(MaakRadius.pill),
+      ),
+      child: Text(
+        label,
+        style: MaakText.caption.copyWith(
+          fontWeight: FontWeight.w600,
+          color: error
+              ? const Color(0xFFB0222A)
+              : role?.text ?? MaakColors.ink,
+        ),
+      ),
+    );
+  }
 }
 
 class SectionTitle extends StatelessWidget {

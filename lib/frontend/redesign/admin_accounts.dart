@@ -6,6 +6,8 @@ part of 'admin.dart';
 
 enum _AccountFilter { all, active, blocked }
 
+enum _AccountType { all, helpSeeker, volunteer }
+
 /// Outcome of a block/reactivate dialog: the action succeeded, or another
 /// administrator changed the account first and the page must refresh.
 typedef ModerationOutcome = ({bool stale, String? text});
@@ -52,9 +54,9 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
   final _searchController = TextEditingController();
   String _search = '';
   _AccountFilter _filter = _AccountFilter.all;
+  _AccountType _type = _AccountType.all;
   // Rows stay visible while a refresh runs; only the first load shows a spinner.
   List<Map<String, dynamic>>? _rows;
-  List<Map<String, dynamic>>? _pendingAppeals;
   Object? _error;
   bool _loading = true;
   bool _opening = false;
@@ -77,7 +79,6 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
       if (mounted) {
         setState(() {
           _rows = data.rows;
-          _pendingAppeals = data.pendingAppeals;
           _error = null;
         });
       }
@@ -129,24 +130,16 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
     if (mounted) _reload();
   }
 
-  Future<void> _openAppeals() async {
-    if (_opening) return;
-    _opening = true;
-    try {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AppealsAdminPage()),
-      );
-    } finally {
-      _opening = false;
-    }
-    if (mounted) _reload();
-  }
-
   bool _matches(Map<String, dynamic> row) {
     final blocked = row['is_blocked'] == true;
     if (_filter == _AccountFilter.active && blocked) return false;
     if (_filter == _AccountFilter.blocked && !blocked) return false;
+    if (_type == _AccountType.helpSeeker && row['role'] != 'help_seeker') {
+      return false;
+    }
+    if (_type == _AccountType.volunteer && row['role'] != 'volunteer') {
+      return false;
+    }
     if (_search.isEmpty) return true;
     return [
       _accountName(row),
@@ -208,14 +201,9 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             children: [
-              if (_pendingAppeals != null) ...[
-                _AppealsEntryCard(
-                  pending: _pendingAppeals!.length,
-                  onTap: _openAppeals,
-                ),
-                const SizedBox(height: 14),
-              ],
               _filters(all.length, all.length - blockedCount, blockedCount),
+              const SizedBox(height: 10),
+              _typeFilters(all),
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 _RefreshFailedNotice(error: _error!, retry: _reload),
@@ -243,6 +231,33 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
     );
   }
 
+  // Second row, same look as the status filter: narrows by account type.
+  Widget _typeFilters(List<Map<String, dynamic>> all) {
+    int count(String role) => all.where((r) => r['role'] == role).length;
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_AccountType>(
+        showSelectedIcon: false,
+        segments: [
+          ButtonSegment(
+            value: _AccountType.all,
+            label: _FilterLabel('All types (${all.length})'),
+          ),
+          ButtonSegment(
+            value: _AccountType.helpSeeker,
+            label: _FilterLabel('Help seekers (${count('help_seeker')})'),
+          ),
+          ButtonSegment(
+            value: _AccountType.volunteer,
+            label: _FilterLabel('Volunteers (${count('volunteer')})'),
+          ),
+        ],
+        selected: {_type},
+        onSelectionChanged: (value) => setState(() => _type = value.first),
+      ),
+    );
+  }
+
   Widget _emptyState(bool noAccounts) {
     if (noAccounts) {
       return const EmptyState(
@@ -250,7 +265,7 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
         'Registered members will appear here.',
       );
     }
-    if (_search.isNotEmpty) {
+    if (_search.isNotEmpty || _type != _AccountType.all) {
       return const EmptyState(
         'No matching accounts',
         'Try a different search or filter.',
@@ -338,9 +353,13 @@ class _AccountCard extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: AppColors.selectedCardFill,
-            child: Text(initials(_accountName(account))),
+          UserPhoto(
+            userId: account['user_id'] as String?,
+            size: 40,
+            child: CircleAvatar(
+              backgroundColor: AppColors.selectedCardFill,
+              child: Text(initials(_accountName(account))),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -586,10 +605,14 @@ class _AccountDetailPageState extends State<AccountDetailPage> {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: AppColors.selectedCardFill,
-                        child: Text(initials(_name)),
+                      UserPhoto(
+                        userId: _id,
+                        size: 56,
+                        child: CircleAvatar(
+                          radius: 28,
+                          backgroundColor: AppColors.selectedCardFill,
+                          child: Text(initials(_name)),
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(

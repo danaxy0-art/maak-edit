@@ -1,3 +1,4 @@
+import '../../backend/services/push_notification_service.dart';
 import '../../backend/services/supabase_service.dart';
 import 'ui.dart';
 
@@ -9,6 +10,7 @@ import 'navigation.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'support.dart';
+import 'matching_page.dart';
 import 'in_app_banner.dart'; // ADDED: pop-up banner for new notifications
 
 class AppShell extends StatefulWidget {
@@ -25,6 +27,26 @@ class _AppShellState extends State<AppShell> {
   final _navigator = GlobalKey<NavigatorState>();
   int _index = 0;
   late final _unread = SupabaseService.unreadMessageCount();
+
+  // Opens a push notification the user tapped (now, or before this shell existed).
+  @override
+  void initState() {
+    super.initState();
+    PushNotificationService.pendingOpen.addListener(_openPendingPush);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingPush());
+  }
+
+  @override
+  void dispose() {
+    PushNotificationService.pendingOpen.removeListener(_openPendingPush);
+    super.dispose();
+  }
+
+  void _openPendingPush() {
+    if (!mounted || PushNotificationService.pendingOpen.value == null) return;
+    final n = PushNotificationService.takePendingOpen();
+    if (n != null) _openNotification(n);
+  }
   Widget _page(int index) => switch (index) {
     1 =>
       widget.role == 'volunteer' ? const RequestsPage() : const JourneyPage(),
@@ -50,15 +72,14 @@ class _AppShellState extends State<AppShell> {
     if (nav == null) return;
     // 'restricted': an administrator ended this conversation (reference_id is
     // the support request); open it so the member sees why.
-    if ((n['kind'] == 'message' || n['kind'] == 'restricted') &&
+    if ((n['kind'] == 'message' ||
+            n['kind'] == 'chat_reopen' ||
+            n['kind'] == 'restricted') &&
         n['reference_id'] != null) {
-      nav.push(
-        MaterialPageRoute(
-          builder: (_) => ConversationPage(
-            requestId: n['reference_id'] as String,
-            name: 'Conversation',
-          ),
-        ),
+      ConversationPage.open(
+        context,
+        requestId: n['reference_id'] as String,
+        name: 'Conversation',
       );
     } else if (n['kind'] == 'request') {
       nav.push(
@@ -68,6 +89,8 @@ class _AppShellState extends State<AppShell> {
               : const JourneyPage(),
         ),
       );
+    } else if (n['kind'] == 'match' && widget.role == 'help_seeker') {
+      nav.push(MaterialPageRoute(builder: (_) => const MatchingPage()));
     }
   }
   // === END ADDED ===
