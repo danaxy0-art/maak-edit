@@ -348,6 +348,10 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
   // Restriction and lift events for this report's conversation; null when the
   // lift migration is not installed or the history could not be loaded.
   List<Map<String, dynamic>>? _restrictionHistory;
+  // admin_report_media: the reported item and open-report context media. Null
+  // when not loaded, the migration is missing, or loading failed.
+  Map<String, dynamic>? _media;
+  bool _mediaLoaded = false;
   Object? _error;
   bool _loading = true;
   bool _acting = false;
@@ -390,6 +394,18 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
           if (mounted) setState(() => _restrictionHistory = history);
         } catch (error) {
           debugPrint('Restriction history load failed: ${error.runtimeType}');
+        }
+      }
+      if (_hasMedia(details)) {
+        try {
+          final media = await SupabaseService.getReportMedia(
+            _reportId,
+          ).timeout(const Duration(seconds: 15));
+          if (mounted) setState(() => _media = media);
+        } catch (error) {
+          debugPrint('Report media load failed: ${error.runtimeType}');
+        } finally {
+          if (mounted) setState(() => _mediaLoaded = true);
         }
       }
     } catch (error) {
@@ -689,11 +705,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           const SizedBox(height: 8),
-          if (type != 'text')
-            Text(
-              '${_messageTypeLabel(type)} (attachments are not shown to administrators)',
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ),
+          if (type != 'text') _reportedMedia(d, type),
           if (type == 'text')
             Text(
               d['message_body'] as String? ?? '',
@@ -711,6 +723,96 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
           ),
         ],
       ),
+    );
+  }
+
+  static const _defaultMediaBodies = {'Photo', 'Video', 'Voice message'};
+
+  static bool _hasMedia(Map<String, dynamic> d) =>
+      (d['message_type'] ?? 'text') != 'text' ||
+      (d['context'] as List? ?? const []).any(
+        (m) => m is Map && m['message_type'] != 'text' && m['deleted'] != true,
+      );
+
+  // A caption typed with the media; the default "Photo"/"Video" body is not one.
+  Widget? _caption(String? body) {
+    final text = (body ?? '').trim();
+    if (text.isEmpty || _defaultMediaBodies.contains(text)) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        text,
+        key: const ValueKey('report_media_caption'),
+        style: const TextStyle(height: 1.4),
+      ),
+    );
+  }
+
+  Widget _mediaPlaceholder(String text) => Text(
+    text,
+    style: const TextStyle(fontStyle: FontStyle.italic, height: 1.4),
+  );
+
+  Widget _reportedMedia(Map<String, dynamic> d, String? type) {
+    final item = _media?['reported'];
+    final caption = _caption(d['message_body'] as String?);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (item is Map)
+          AdminReportMediaView(
+            key: const ValueKey('report_media_reported'),
+            item: Map<String, dynamic>.from(item),
+          )
+        else if (!_mediaLoaded)
+          const LinearProgressIndicator()
+        else
+          _mediaPlaceholder(
+            '${_messageTypeLabel(type)} (could not be loaded. Refresh to try again.)',
+          ),
+        ?caption,
+      ],
+    );
+  }
+
+  Widget _contextMessage(Map m) {
+    final type = m['message_type'] as String?;
+    if (type == 'text' || m['deleted'] == true) {
+      return Text(
+        m['body'] as String? ?? '',
+        style: TextStyle(
+          height: 1.4,
+          fontStyle: m['deleted'] == true ? FontStyle.italic : FontStyle.normal,
+        ),
+      );
+    }
+    final label = _messageTypeLabel(type);
+    if (m['is_reported'] == true) {
+      return _mediaPlaceholder('$label (shown above in the reported message)');
+    }
+    final item = (_media?['context'] as List? ?? const [])
+        .whereType<Map>()
+        .where((c) => c['message_id'] == m['message_id'])
+        .firstOrNull;
+    if (item != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdminReportMediaView(
+            key: ValueKey('report_media_context_${m['message_id']}'),
+            item: Map<String, dynamic>.from(item),
+          ),
+          ?_caption(m['body'] as String?),
+        ],
+      );
+    }
+    if (_media != null && _media!['context_media_allowed'] != true) {
+      return _mediaPlaceholder(
+        '$label (context media is shown only while the report is open)',
+      );
+    }
+    return _mediaPlaceholder(
+      _mediaLoaded ? '$label (not available)' : '$label (loading…)',
     );
   }
 
@@ -780,17 +882,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    m['message_type'] == 'text' || m['deleted'] == true
-                        ? m['body'] as String? ?? ''
-                        : '${_messageTypeLabel(m['message_type'] as String?)} (not shown)',
-                    style: TextStyle(
-                      height: 1.4,
-                      fontStyle: m['deleted'] == true
-                          ? FontStyle.italic
-                          : FontStyle.normal,
-                    ),
-                  ),
+                  _contextMessage(m),
                 ],
               ),
             ),

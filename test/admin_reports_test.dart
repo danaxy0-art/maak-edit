@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maak_app/backend/services/supabase_service.dart';
 import 'package:maak_app/backend/validation/form_policy.dart';
 import 'package:maak_app/frontend/redesign/admin.dart';
+import 'package:maak_app/frontend/redesign/admin_report_media.dart';
 import 'package:maak_app/frontend/redesign/feedback.dart';
 import 'package:maak_app/frontend/theme/app_theme.dart';
 
@@ -24,6 +26,73 @@ class _PkceStorage extends GotrueAsyncStorage {
   @override
   Future<void> removeItem({required String key}) async {}
 }
+
+// Platform players need a device; these record what the viewer asks for.
+class _FakeAudio implements AdminAudioSession {
+  static final log = <String>[];
+  static bool fail = false;
+  final _done = StreamController<void>.broadcast();
+  @override
+  Stream<void> get completed => _done.stream;
+  @override
+  Future<void> play(String url) async {
+    if (fail) throw Exception('decoder failed');
+    log.add('play $url');
+  }
+
+  @override
+  Future<void> pause() async => log.add('pause');
+  @override
+  Future<void> resume() async => log.add('resume');
+  @override
+  Future<void> close() async => _done.close();
+}
+
+class _FakeVideo extends ChangeNotifier implements AdminVideoSession {
+  _FakeVideo(this.url) {
+    opened.add(url);
+  }
+  static final opened = <Uri>[];
+  static bool failInit = false;
+  final Uri url;
+  bool _playing = false;
+  @override
+  Future<void> initialize() async {
+    if (failInit) throw Exception('codec not supported');
+  }
+
+  @override
+  double get aspectRatio => 16 / 9;
+  @override
+  bool get isPlaying => _playing;
+  @override
+  bool get hasError => false;
+  @override
+  Future<void> play() async {
+    _playing = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> pause() async {
+    _playing = false;
+    notifyListeners();
+  }
+
+  @override
+  Widget view() => const ColoredBox(
+    key: ValueKey('fake_video_surface'),
+    color: Colors.black,
+  );
+  @override
+  Future<void> close() async {}
+}
+
+// 1x1 PNG, and bytes that are not an image.
+final _png = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+);
+final _notAnImage = Uint8List.fromList([1, 2, 3, 4]);
 
 const adminId = '60000000-0000-0000-0000-000000000001';
 const r1 = '60000000-0000-0000-0000-0000000000a1';
@@ -128,6 +197,10 @@ void main() {
   var reports = <Map<String, dynamic>>[];
   var detail = <String, Map<String, dynamic>>{};
   var restrictionHistory = <Map<String, dynamic>>[];
+  var media = <String, Map<String, dynamic>>{};
+  // Storage sign requests: (object path, expiresIn).
+  final signed = <(String, Object?)>[];
+  final missingFiles = <String>{};
 
   setUpAll(() async {
     await Supabase.initialize(
@@ -149,6 +222,29 @@ void main() {
         bodies[name] = params;
         if (holds[name] != null) await holds[name]!.future;
         if (offline.contains(name)) throw const SocketException('offline');
+        if (request.url.path.contains('/storage/v1/object/sign/')) {
+          // Like Storage: signs only an existing object the caller may read.
+          final path = request.url.path.split('/object/sign/chat-media/').last;
+          signed.add((path, params?['expiresIn']));
+          final gone = missingFiles.contains(path);
+          return http.Response(
+            jsonEncode(
+              gone
+                  ? {
+                      'statusCode': '404',
+                      'error': 'not_found',
+                      'message': 'Object not found',
+                    }
+                  : {
+                      'signedURL':
+                          '/object/sign/chat-media/$path?token=short-lived',
+                    },
+            ),
+            gone ? 400 : 200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          );
+        }
         Object? data;
         var status = 200;
         if (overrides.containsKey(name)) {
@@ -206,6 +302,8 @@ void main() {
                   'resolved_reports': 2,
                 }
               : {'report_id': id, 'status': 'dismissed'};
+        } else if (name == 'admin_report_media') {
+          data = media[params!['p_report_id']];
         } else if (name == 'admin_conversation_restriction_history') {
           data = restrictionHistory;
         } else if (name == 'admin_lift_conversation_restriction') {
@@ -260,6 +358,9 @@ void main() {
     reports = [];
     detail = {};
     restrictionHistory = [];
+    media = {};
+    signed.clear();
+    missingFiles.clear();
   });
   tearDownAll(() => Supabase.instance.dispose());
 
@@ -868,6 +969,384 @@ void main() {
         find.widgetWithText(FilledButton, 'End conversation'),
       );
       expect(end.onPressed, isNull);
+    });
+  });
+
+  group('Report media', () {
+    const reportedPath = 'c1/u2/reported.png';
+    const voicePath = 'c1/u1/voice.wav';
+    const videoPath = 'c1/u2/video.mp4';
+    final images = <String>[];
+    final originalAudio = AdminReportMediaPlayers.audio;
+    final originalVideo = AdminReportMediaPlayers.video;
+    final originalImage = AdminReportMediaPlayers.image;
+    setUp(() {
+      images.clear();
+      _FakeAudio.log.clear();
+      _FakeAudio.fail = false;
+      _FakeVideo.opened.clear();
+      _FakeVideo.failInit = false;
+      AdminReportMediaPlayers.audio = _FakeAudio.new;
+      AdminReportMediaPlayers.video = _FakeVideo.new;
+      AdminReportMediaPlayers.image = (url) {
+        images.add(url);
+        return MemoryImage(_png);
+      };
+    });
+    tearDown(() {
+      AdminReportMediaPlayers.audio = originalAudio;
+      AdminReportMediaPlayers.video = originalVideo;
+      AdminReportMediaPlayers.image = originalImage;
+    });
+
+    Map<String, dynamic> item(
+      String type,
+      String? path, {
+      bool available = true,
+      String? reason,
+      String? mime,
+      int? durationMs,
+    }) => {
+      'message_type': type,
+      'mime':
+          mime ??
+          {
+            'image': 'image/png',
+            'voice': 'audio/wav',
+            'video': 'video/mp4',
+          }[type],
+      'duration_ms': durationMs,
+      'available': available,
+      'path': available ? path : null,
+      'unavailable_reason': available ? null : reason,
+    };
+
+    Map<String, dynamic> ctx(
+      String id,
+      String type,
+      String body, {
+      bool reported = false,
+    }) => {
+      'message_id': id,
+      'body': body,
+      'message_type': type,
+      'created_at': '2026-11-05T09:55:00Z',
+      'deleted': false,
+      'is_reported': reported,
+      'sender': reported ? 'reported' : 'reporter',
+    };
+
+    // A photo report r1 whose context holds a voice message, a video and a
+    // photo the server did not return (outside the allowed media).
+    void seedMedia({
+      String status = 'open',
+      Map<String, dynamic>? reported,
+      List<Map<String, dynamic>>? context,
+      String caption = 'Is this okay to send?',
+    }) {
+      final row = {
+        ...reportRow(r1, status: status, preview: caption),
+        'message_type': 'image',
+      };
+      reports = [row];
+      detail[r1] = {
+        ...details(row),
+        'attachment_present': true,
+        'context': [
+          ctx('mv', 'voice', 'Voice message'),
+          ctx('mr', 'image', caption, reported: true),
+          ctx('mx', 'video', 'Video'),
+          ctx('mi', 'image', 'Photo'),
+        ],
+      };
+      final open = status == 'open';
+      media[r1] = {
+        'report_id': r1,
+        'conversation_exists': true,
+        'context_media_allowed': open,
+        'reported':
+            reported ??
+            {
+              ...item('image', reportedPath),
+              'message_id': 'mr',
+              'deleted_for_everyone': false,
+            },
+        'context':
+            context ??
+            (open
+                ? [
+                    {
+                      ...item('voice', voicePath, durationMs: 4000),
+                      'message_id': 'mv',
+                    },
+                    {...item('video', videoPath), 'message_id': 'mx'},
+                  ]
+                : []),
+      };
+    }
+
+    testWidgets('reported photo loads from a 60-second signed URL', (
+      tester,
+    ) async {
+      seedMedia();
+      await openDetail(tester, r1);
+      expect(count('admin_report_media'), 1);
+      expect(bodies['admin_report_media'], {'p_report_id': r1});
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('report_media_reported')),
+          matching: find.byKey(const ValueKey('report_media_image')),
+        ),
+        findsOneWidget,
+      );
+      expect(signed, contains((reportedPath, 60)));
+      expect(images.first, contains('/storage/v1/object/sign/chat-media/'));
+      expect(images.first, contains('token='));
+      expect(images.any((u) => u.contains('/object/public/')), isFalse);
+      expect(find.text('Is this okay to send?'), findsOneWidget);
+      expect(find.textContaining('not shown to administrators'), findsNothing);
+      // Only paths the server returned are ever signed.
+      expect(signed.map((s) => s.$1).toSet(), isNot(contains(contains('mi'))));
+      expect(find.text('Photo (not available)'), findsOneWidget);
+      expect(
+        find.text('Photo (shown above in the reported message)'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('open report: context voice plays, pauses and resumes', (
+      tester,
+    ) async {
+      seedMedia();
+      await openDetail(tester, r1);
+      final voice = find.byKey(const ValueKey('report_media_context_mv'));
+      expect(
+        find.descendant(of: voice, matching: find.text('Voice message · 4s')),
+        findsOneWidget,
+      );
+      final play = find.descendant(
+        of: voice,
+        matching: find.byKey(const ValueKey('report_media_play')),
+      );
+      await tester.tap(play);
+      await settle(tester);
+      expect(_FakeAudio.log.single, startsWith('play https://'));
+      expect(_FakeAudio.log.single, contains('chat-media/$voicePath?token='));
+      expect(signed, contains((voicePath, 60)));
+      expect(find.text('Playing voice message'), findsOneWidget);
+      await tester.tap(play);
+      await settle(tester);
+      await tester.tap(play);
+      await settle(tester);
+      expect(_FakeAudio.log.skip(1), ['pause', 'resume']);
+    });
+
+    testWidgets('open report: context video opens a player and plays', (
+      tester,
+    ) async {
+      seedMedia();
+      await openDetail(tester, r1);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('report_media_context_mx')),
+          matching: find.byKey(const ValueKey('report_media_video_open')),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Reported video'), findsOneWidget);
+      expect(find.byKey(const ValueKey('fake_video_surface')), findsOneWidget);
+      expect(_FakeVideo.opened.single.path, endsWith('chat-media/$videoPath'));
+      expect(signed, contains((videoPath, 60)));
+      await tester.tap(find.byKey(const ValueKey('report_media_play')));
+      await settle(tester);
+      expect(find.byTooltip('Pause video'), findsOneWidget);
+    });
+
+    testWidgets('decided report: reported media kept, context media explained', (
+      tester,
+    ) async {
+      seedMedia(status: 'dismissed');
+      await openDetail(tester, r1);
+      expect(find.byKey(const ValueKey('report_media_image')), findsOneWidget);
+      expect(
+        find.text(
+          'Voice message (context media is shown only while the report is open)',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Video (context media is shown only while the report is open)',
+        ),
+        findsOneWidget,
+      );
+      expect(signed.map((s) => s.$1), [reportedPath]);
+    });
+
+    testWidgets('deleted conversation and removed file show clear messages', (
+      tester,
+    ) async {
+      seedMedia(
+        reported: {
+          ...item(
+            'image',
+            null,
+            available: false,
+            reason: 'conversation_deleted',
+          ),
+          'message_id': 'mr',
+          'deleted_for_everyone': false,
+        },
+        context: [
+          {
+            ...item(
+              'voice',
+              voicePath,
+              available: false,
+              reason: 'file_missing',
+            ),
+            'message_id': 'mv',
+          },
+        ],
+      );
+      await openDetail(tester, r1);
+      expect(
+        find.text(
+          'Photo is no longer available because the conversation was deleted.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Voice message is no longer available. The file was removed.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        signed,
+        isEmpty,
+        reason: 'nothing is signed for unavailable media',
+      );
+    });
+
+    testWidgets('unsupported type is never loaded', (tester) async {
+      seedMedia(
+        reported: {
+          ...item('image', 'c1/u2/reported.gif', mime: 'image/gif'),
+          'message_id': 'mr',
+          'deleted_for_everyone': false,
+        },
+        context: [],
+      );
+      await openDetail(tester, r1);
+      expect(
+        find.text("This media type can't be shown in the app."),
+        findsOneWidget,
+      );
+      expect(signed, isEmpty);
+    });
+
+    testWidgets('refused signing shows Retry, which signs a fresh URL', (
+      tester,
+    ) async {
+      seedMedia(context: []);
+      missingFiles.add(reportedPath);
+      await openDetail(tester, r1);
+      expect(find.text('This media is no longer available.'), findsOneWidget);
+      missingFiles.clear();
+      await tester.tap(find.byKey(const ValueKey('report_media_retry')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('report_media_image')), findsOneWidget);
+      expect(signed.where((s) => s.$1 == reportedPath).length, 2);
+    });
+
+    testWidgets('offline signing and a damaged photo both offer Retry', (
+      tester,
+    ) async {
+      seedMedia(context: []);
+      offline.add('reported.png');
+      await openDetail(tester, r1);
+      expect(
+        find.text(
+          'Could not load this media. Check your connection and try again.',
+        ),
+        findsOneWidget,
+      );
+      offline.clear();
+      AdminReportMediaPlayers.image = (_) => MemoryImage(_notAnImage);
+      await tester.tap(find.byKey(const ValueKey('report_media_retry')));
+      await settle(tester);
+      expect(
+        find.text(
+          'Could not load this photo. It may be damaged or no longer available.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('voice and video playback failures show errors and recover', (
+      tester,
+    ) async {
+      seedMedia();
+      _FakeAudio.fail = true;
+      await openDetail(tester, r1);
+      final play = find.descendant(
+        of: find.byKey(const ValueKey('report_media_context_mv')),
+        matching: find.byKey(const ValueKey('report_media_play')),
+      );
+      await tester.tap(play);
+      await settle(tester);
+      expect(
+        find.text(
+          'Could not load this media. Check your connection and try again. Tap play to retry.',
+        ),
+        findsOneWidget,
+      );
+      _FakeAudio.fail = false;
+      await tester.tap(play);
+      await settle(tester);
+      expect(_FakeAudio.log.single, startsWith('play '));
+      expect(find.byKey(const ValueKey('report_media_error')), findsNothing);
+
+      _FakeVideo.failInit = true;
+      await tester.tap(find.byKey(const ValueKey('report_media_video_open')));
+      await settle(tester);
+      expect(
+        find.text(
+          'Could not play this video. It may be damaged, unsupported on this device, or no longer available.',
+        ),
+        findsOneWidget,
+      );
+      _FakeVideo.failInit = false;
+      await tester.tap(find.byKey(const ValueKey('report_media_retry')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('fake_video_surface')), findsOneWidget);
+    });
+
+    testWidgets(
+      'database without the media migration keeps a safe placeholder',
+      (tester) async {
+        seedMedia();
+        overrides['admin_report_media'] = (
+          404,
+          {'code': 'PGRST202', 'message': 'Could not find the function'},
+        );
+        await openDetail(tester, r1);
+        expect(
+          find.text('Photo (could not be loaded. Refresh to try again.)'),
+          findsOneWidget,
+        );
+        expect(find.text('Voice message (not available)'), findsOneWidget);
+        expect(signed, isEmpty);
+        expect(find.text('Is this okay to send?'), findsOneWidget);
+      },
+    );
+
+    testWidgets('text reports never request media', (tester) async {
+      seed();
+      await openDetail(tester, r1);
+      expect(count('admin_report_media'), 0);
+      expect(signed, isEmpty);
     });
   });
 

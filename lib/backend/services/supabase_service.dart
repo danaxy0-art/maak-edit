@@ -726,6 +726,29 @@ class SupabaseService {
             as Map,
       );
 
+  /// Media of one report (20261107130000_admin_report_media.sql): the reported
+  /// item and, for an open report, the ±5 context media. Null when that
+  /// migration is not installed.
+  static Future<Map<String, dynamic>?> getReportMedia(String reportId) async {
+    try {
+      return Map<String, dynamic>.from(
+        await client.rpc(
+              'admin_report_media',
+              params: {'p_report_id': reportId},
+            )
+            as Map,
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingFunction(e)) rethrow;
+      return null;
+    }
+  }
+
+  /// A 60-second signed URL for one report media file. Storage signs it only
+  /// when the Admin read rule allows that path. Never log or store the URL.
+  static Future<String> reportMediaUrl(String path) =>
+      client.storage.from('chat-media').createSignedUrl(path, 60);
+
   static Future<void> dismissReport({
     required String reportId,
     required String reason,

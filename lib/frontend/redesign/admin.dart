@@ -16,6 +16,7 @@ import 'condition_reviews.dart';
 import '../widgets/user_photo.dart';
 import '../../backend/services/push_notification_service.dart';
 import 'report_message.dart' show kReportReasons;
+import 'admin_report_media.dart';
 
 part 'admin_accounts.dart';
 part 'admin_appeals.dart';
