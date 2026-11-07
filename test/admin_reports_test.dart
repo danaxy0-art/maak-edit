@@ -460,7 +460,7 @@ void main() {
       expect(find.text('2 open reports in this conversation'), findsOneWidget);
       expect(find.text('Open (1)'), findsOneWidget);
       expect(find.text('Dismissed (1)'), findsOneWidget);
-      expect(find.text('Conversation ended (1)'), findsOneWidget);
+      expect(find.text('Ended (1)'), findsOneWidget);
       expect(find.text('All (3)'), findsOneWidget);
     });
 

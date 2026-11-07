@@ -449,31 +449,15 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
   // Same look as the Accounts page filter.
   Widget _filters(List<Map<String, dynamic>> all) {
     int count(String status) => all.where((r) => r['status'] == status).length;
-    return SizedBox(
-      width: double.infinity,
-      child: SegmentedButton<_ApplicationFilter>(
-        showSelectedIcon: false,
-        segments: [
-          ButtonSegment(
-            value: _ApplicationFilter.all,
-            label: _FilterLabel('All (${all.length})'),
-          ),
-          ButtonSegment(
-            value: _ApplicationFilter.pending,
-            label: _FilterLabel('Pending (${count('pending_review')})'),
-          ),
-          ButtonSegment(
-            value: _ApplicationFilter.accepted,
-            label: _FilterLabel('Accepted (${count('approved')})'),
-          ),
-          ButtonSegment(
-            value: _ApplicationFilter.rejected,
-            label: _FilterLabel('Rejected (${count('rejected')})'),
-          ),
-        ],
-        selected: {_filter},
-        onSelectionChanged: (value) => setState(() => _filter = value.first),
-      ),
+    return _FilterBar<_ApplicationFilter>(
+      options: {
+        _ApplicationFilter.all: 'All (${all.length})',
+        _ApplicationFilter.pending: 'Pending (${count('pending_review')})',
+        _ApplicationFilter.accepted: 'Accepted (${count('approved')})',
+        _ApplicationFilter.rejected: 'Rejected (${count('rejected')})',
+      },
+      selected: _filter,
+      onChanged: (value) => setState(() => _filter = value),
     );
   }
 

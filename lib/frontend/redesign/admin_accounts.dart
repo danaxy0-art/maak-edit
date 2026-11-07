@@ -234,27 +234,14 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
   // Second row, same look as the status filter: narrows by account type.
   Widget _typeFilters(List<Map<String, dynamic>> all) {
     int count(String role) => all.where((r) => r['role'] == role).length;
-    return SizedBox(
-      width: double.infinity,
-      child: SegmentedButton<_AccountType>(
-        showSelectedIcon: false,
-        segments: [
-          ButtonSegment(
-            value: _AccountType.all,
-            label: _FilterLabel('All types (${all.length})'),
-          ),
-          ButtonSegment(
-            value: _AccountType.helpSeeker,
-            label: _FilterLabel('Help seekers (${count('help_seeker')})'),
-          ),
-          ButtonSegment(
-            value: _AccountType.volunteer,
-            label: _FilterLabel('Volunteers (${count('volunteer')})'),
-          ),
-        ],
-        selected: {_type},
-        onSelectionChanged: (value) => setState(() => _type = value.first),
-      ),
+    return _FilterBar<_AccountType>(
+      options: {
+        _AccountType.all: 'All types (${all.length})',
+        _AccountType.helpSeeker: 'Help seekers (${count('help_seeker')})',
+        _AccountType.volunteer: 'Volunteers (${count('volunteer')})',
+      },
+      selected: _type,
+      onChanged: (value) => setState(() => _type = value),
     );
   }
 
@@ -282,37 +269,56 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
           );
   }
 
-  Widget _filters(int all, int active, int blocked) => SizedBox(
-    width: double.infinity,
-    child: SegmentedButton<_AccountFilter>(
-      showSelectedIcon: false,
-      segments: [
-        ButtonSegment(
-          value: _AccountFilter.all,
-          label: _FilterLabel('All ($all)'),
-        ),
-        ButtonSegment(
-          value: _AccountFilter.active,
-          label: _FilterLabel('Active ($active)'),
-        ),
-        ButtonSegment(
-          value: _AccountFilter.blocked,
-          label: _FilterLabel('Blocked ($blocked)'),
-        ),
-      ],
-      selected: {_filter},
-      onSelectionChanged: (value) => setState(() => _filter = value.first),
-    ),
-  );
+  Widget _filters(int all, int active, int blocked) =>
+      _FilterBar<_AccountFilter>(
+        options: {
+          _AccountFilter.all: 'All ($all)',
+          _AccountFilter.active: 'Active ($active)',
+          _AccountFilter.blocked: 'Blocked ($blocked)',
+        },
+        selected: _filter,
+        onChanged: (value) => setState(() => _filter = value),
+      );
 }
 
-// Shrinks rather than overflows on small phones with large text.
-class _FilterLabel extends StatelessWidget {
-  final String text;
-  const _FilterLabel(this.text);
+// The one filter style for every admin list: a full-width segmented row whose
+// selected segment uses the black button theme (see segmentedButtonTheme).
+class _FilterBar<T extends Enum> extends StatelessWidget {
+  final Map<T, String> options;
+  final T selected;
+  final ValueChanged<T> onChanged;
+  // When set, each segment gets the key '<keyPrefix>_<value name>' for tests.
+  final String? keyPrefix;
+  const _FilterBar({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.keyPrefix,
+  });
+
   @override
-  Widget build(BuildContext context) =>
-      FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1));
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: SegmentedButton<T>(
+      showSelectedIcon: false,
+      segments: [
+        for (final entry in options.entries)
+          ButtonSegment(
+            value: entry.key,
+            // Shrinks rather than overflows on small phones with large text.
+            label: FittedBox(
+              key: keyPrefix == null
+                  ? null
+                  : ValueKey('${keyPrefix}_${entry.key.name}'),
+              fit: BoxFit.scaleDown,
+              child: Text(entry.value, maxLines: 1),
+            ),
+          ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (value) => onChanged(value.first),
+    ),
+  );
 }
 
 class _RefreshFailedNotice extends StatelessWidget {

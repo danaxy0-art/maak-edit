@@ -157,24 +157,17 @@ class _ReportsAdminPageState extends State<ReportsAdminPage> {
 
   Widget _filters(List<Map<String, dynamic>> all) {
     int count(_ReportFilter f) => all.where((r) => _inFilter(f, r)).length;
-    final labels = {
-      _ReportFilter.open: 'Open',
-      _ReportFilter.dismissed: 'Dismissed',
-      _ReportFilter.ended: 'Conversation ended',
-      _ReportFilter.all: 'All',
-    };
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final entry in labels.entries)
-          ChoiceChip(
-            key: ValueKey('report_filter_${entry.key.name}'),
-            label: Text('${entry.value} (${count(entry.key)})'),
-            selected: _filter == entry.key,
-            onSelected: (_) => setState(() => _filter = entry.key),
-          ),
-      ],
+    return _FilterBar<_ReportFilter>(
+      keyPrefix: 'report_filter',
+      options: {
+        _ReportFilter.all: 'All (${count(_ReportFilter.all)})',
+        _ReportFilter.open: 'Open (${count(_ReportFilter.open)})',
+        _ReportFilter.dismissed:
+            'Dismissed (${count(_ReportFilter.dismissed)})',
+        _ReportFilter.ended: 'Ended (${count(_ReportFilter.ended)})',
+      },
+      selected: _filter,
+      onChanged: (value) => setState(() => _filter = value),
     );
   }
 
