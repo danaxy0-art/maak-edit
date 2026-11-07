@@ -629,10 +629,13 @@ class RequestsPage extends StatelessWidget {
                         'canceled' => Icons.block,
                         _ => Icons.close,
                       },
+                      // Same green / red / grey as the help seeker's
+                      // request cards (_RequestCard).
                       color: switch (row['status']) {
                         'pending' => MaakColors.pending,
-                        'accepted' => MaakColors.selected,
-                        _ => MaakColors.fill,
+                        'accepted' => const Color(0xFFCDEFD8),
+                        'canceled' => const Color(0xFFE3E5E8),
+                        _ => const Color(0xFFFAC9C9),
                       },
                     ),
                   ],
