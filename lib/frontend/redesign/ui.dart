@@ -126,23 +126,70 @@ class FormSheet extends StatelessWidget {
   final Widget child;
   const FormSheet({super.key, required this.child});
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-    decoration: const BoxDecoration(
-      color: MaakColors.surface,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      border: Border.fromBorderSide(BorderSide(color: MaakColors.border)),
-      boxShadow: [
-        BoxShadow(
-          color: Color(0x14AA6464),
-          blurRadius: 20,
-          offset: Offset(0, -4),
-        ),
-      ],
+  Widget build(BuildContext context) => CustomPaint(
+    painter: const _FadingSheetPainter(),
+    child: Padding(
+      // Extra bottom room so the last line still sits on white, above the fade.
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+      child: SizedBox(width: double.infinity, child: child),
     ),
-    child: child,
   );
+}
+
+/// White sheet with a rounded top and a soft shadow along the top edge whose
+/// bottom fades into the page background, so it never looks cut off.
+class _FadingSheetPainter extends CustomPainter {
+  const _FadingSheetPainter();
+  static const _fade = 150.0;
+  static const _radius = Radius.circular(26);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final sheet = RRect.fromRectAndCorners(
+      rect,
+      topLeft: _radius,
+      topRight: _radius,
+    );
+    final solidUntil = size.height <= _fade
+        ? 0.0
+        : (size.height - _fade) / size.height;
+    Shader fading(Color color) => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      // Eased: slow at first, then gone well before the bottom edge.
+      colors: [
+        color,
+        color,
+        color.withValues(alpha: color.a * .55),
+        color.withValues(alpha: 0),
+      ],
+      stops: [0, solidUntil, solidUntil + (1 - solidUntil) * .45, .97],
+    ).createShader(rect);
+
+    // Shadow only above the sheet, where it meets the header.
+    canvas
+      ..save()
+      ..clipRect(Rect.fromLTRB(-40, -40, size.width + 40, _radius.y))
+      ..drawRRect(
+        sheet.shift(const Offset(0, -4)),
+        Paint()
+          ..color = const Color(0x14AA6464)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      )
+      ..restore()
+      ..drawRRect(sheet, Paint()..shader = fading(MaakColors.surface))
+      ..drawRRect(
+        sheet.deflate(0.5),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..shader = fading(MaakColors.border),
+      );
+  }
+
+  @override
+  bool shouldRepaint(_FadingSheetPainter oldDelegate) => false;
 }
 
 class PrivacyNote extends StatelessWidget {
