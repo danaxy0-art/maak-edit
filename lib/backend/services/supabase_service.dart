@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../validation/password_policy.dart';
 import '../validation/form_policy.dart';
+import 'push_notification_service.dart';
 
 class AiMatchingDisabled implements Exception {}
 
@@ -122,11 +123,14 @@ class SupabaseService {
 
   static Future<void> endPasswordRecovery() async {
     _recoveryUserId = null;
+    await PushNotificationService.forgetDevice();
     await client.auth.signOut(scope: SignOutScope.local);
   }
 
   static Future<void> signOut() async {
     _recoveryUserId = null;
+    // Stop pushes to this device before the session ends.
+    await PushNotificationService.forgetDevice();
     await client.auth.signOut();
   }
 

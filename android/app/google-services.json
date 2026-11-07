@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "358772229456",
+    "project_id": "maak-35140",
+    "storage_bucket": "maak-35140.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358772229456:android:d11fc337205cf1f65e5855",
+        "android_client_info": {
+          "package_name": "com.example.ma_ak"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyANrnhh2tNsEiIq738HuIQ0VdWleZZJtFQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

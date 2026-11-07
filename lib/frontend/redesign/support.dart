@@ -12,6 +12,8 @@ import '../theme/app_theme.dart';
 import 'ui.dart';
 
 import 'chat_media.dart';
+import '../widgets/user_photo.dart';
+import '../../backend/chat/chat_media_policy.dart' show chatMediaCaption;
 import 'report_message.dart'; // ADDED: report a message
 
 class DataListPage extends StatefulWidget {
@@ -295,7 +297,10 @@ class _VolunteerCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InitialsAvatar(initials(volunteer['full_name'] as String? ?? 'V')),
+          InitialsAvatar(
+            initials(volunteer['full_name'] as String? ?? 'V'),
+            userId: volunteer['user_id'] as String?,
+          ),
           const SizedBox(width: MaakSpace.md),
           Expanded(
             child: Column(
@@ -595,6 +600,7 @@ class RequestsPage extends StatelessWidget {
             children: [
               InitialsAvatar(
                 initials(row['contact_name'] as String? ?? 'Help seeker'),
+                userId: otherParticipantId(row),
               ),
               const SizedBox(width: MaakSpace.md),
               Expanded(
@@ -652,14 +658,10 @@ class RequestsPage extends StatelessWidget {
             const SizedBox(height: 12),
             PrimaryButton(
               'Open conversation',
-              onPressed: () => Navigator.push(
+              onPressed: () => ConversationPage.open(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ConversationPage(
-                    requestId: row['id'] as String,
-                    name: row['contact_name'] as String? ?? 'Your peer',
-                  ),
-                ),
+                requestId: row['id'] as String,
+                name: row['contact_name'] as String? ?? 'Your peer',
               ),
             ),
           ],
@@ -753,22 +755,22 @@ class ConversationsPage extends StatelessWidget {
     emptyText: 'Accepted support requests become conversations here.',
     item: (context, row, reload) => SurfaceCard(
       onTap: () async {
-        await Navigator.push(
+        await ConversationPage.open(
           context,
-          MaterialPageRoute(
-            builder: (_) => ConversationPage(
-              requestId: row['id'] as String,
-              name: row['contact_name'] as String? ?? 'Your peer',
-            ),
-          ),
+          requestId: row['id'] as String,
+          name: row['contact_name'] as String? ?? 'Your peer',
         );
         reload();
       },
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: AppColors.selectedCardFill,
-            child: Text(initials(row['contact_name'] as String? ?? 'Peer')),
+          UserPhoto(
+            userId: otherParticipantId(row),
+            size: 40,
+            child: CircleAvatar(
+              backgroundColor: AppColors.selectedCardFill,
+              child: Text(initials(row['contact_name'] as String? ?? 'Peer')),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -809,6 +811,18 @@ class ConversationPage extends StatefulWidget {
     this.notifications,
   });
 
+  /// Opens a chat full-screen. It goes on the app's root navigator, above the
+  /// shell, so the bottom navigation bar is hidden while the chat is open.
+  static Future<void> open(
+    BuildContext context, {
+    required String requestId,
+    required String name,
+  }) => Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute(
+      builder: (_) => ConversationPage(requestId: requestId, name: name),
+    ),
+  );
+
   @override
   State<ConversationPage> createState() => _ConversationPageState();
 }
@@ -826,6 +840,9 @@ class _ConversationPageState extends State<ConversationPage>
   String? _lastMessageId;
   String? _sendError;
   bool _mediaBusy = false;
+  // An attachment is ready: Send sends it, with the typed text as its caption.
+  bool _hasMediaDraft = false;
+  final _mediaKey = GlobalKey<ChatMediaComposerState>();
   bool _reading = false;
   bool _busy = false;
   bool _ending = false;
@@ -868,7 +885,10 @@ class _ConversationPageState extends State<ConversationPage>
     _restricted = row['restricted_at'] != null;
     final reason = (row['restriction_reason'] as String? ?? '').trim();
     _restrictionReason = reason.isEmpty ? null : reason;
-    if (_restricted) _mediaBusy = false;
+    if (_restricted) {
+      _mediaBusy = false;
+      _hasMediaDraft = false;
+    }
   }
 
   bool _statusLoading = true;
@@ -886,8 +906,17 @@ class _ConversationPageState extends State<ConversationPage>
     _reopenRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted && _ended && !_restricted && !_reopenBusy) {
         _refreshReopenRequests();
+        // support_requests isn't streamed live, so check whether the chat
+        // was reopened (fallback for the notification listener below).
+        _loadStatus();
       }
     });
+    // Reopen requests and decisions create 'chat_reopen' notifications, which
+    // ARE streamed live: refresh at once when one arrives for this chat.
+    _reopenNoticeSubscription = SupabaseService.notificationStream().listen(
+      _onNotices,
+      onError: (Object _) {},
+    );
     _loadStatus();
     // support_requests is not in the Realtime publication, so an open chat
     // learns about an administrator restriction from its notification
@@ -915,7 +944,10 @@ class _ConversationPageState extends State<ConversationPage>
             if (mounted && rows.isNotEmpty) {
               setState(() {
                 _ended = rows.first['ended_at'] != null;
-                if (_ended) _mediaBusy = false;
+                if (_ended) {
+                  _mediaBusy = false;
+                  _hasMediaDraft = false;
+                }
                 _applyRestriction(rows.first);
                 _endedBy = rows.first['ended_by'] as String?;
                 _currentEndedAt = DateTime.tryParse(
@@ -939,10 +971,28 @@ class _ConversationPageState extends State<ConversationPage>
     }
   }
 
+  StreamSubscription<List<Map<String, dynamic>>>? _reopenNoticeSubscription;
+  Set<String>? _seenReopenNotices; // null until the first snapshot
+
+  void _onNotices(List<Map<String, dynamic>> rows) {
+    final ids = {
+      for (final r in rows)
+        if (r['kind'] == 'chat_reopen' && r['reference_id'] == widget.requestId)
+          '${r['id']}',
+    };
+    final seen = _seenReopenNotices;
+    _seenReopenNotices = {...?seen, ...ids};
+    if (seen == null || !mounted) return; // first snapshot = baseline
+    if (ids.difference(seen).isEmpty) return;
+    _loadStatus();
+    _refreshReopenRequests();
+  }
+
   @override
   void dispose() {
     _reopenRefreshTimer?.cancel();
     _statusSubscription?.cancel();
+    _reopenNoticeSubscription?.cancel();
     _restrictionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _input.removeListener(_refreshInput);
@@ -970,7 +1020,10 @@ class _ConversationPageState extends State<ConversationPage>
       if (mounted) {
         setState(() {
           _ended = ended;
-          if (_ended) _mediaBusy = false;
+          if (_ended) {
+            _mediaBusy = false;
+            _hasMediaDraft = false;
+          }
           _applyRestriction(status);
           _endedBy = status['ended_by'] as String?;
           _currentEndedAt = DateTime.tryParse('${status['ended_at'] ?? ''}');
@@ -1064,6 +1117,7 @@ class _ConversationPageState extends State<ConversationPage>
         setState(() {
           _ended = true;
           _mediaBusy = false;
+          _hasMediaDraft = false;
           _endedBy = SupabaseService.currentUser?.id;
           _currentEndedAt = DateTime.now().toUtc();
 
@@ -1670,7 +1724,8 @@ class _ConversationPageState extends State<ConversationPage>
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty ||
+    final media = _hasMediaDraft ? _mediaKey.currentState : null;
+    if ((text.isEmpty && media == null) ||
         _busy ||
         _mediaBusy ||
         _closed ||
@@ -1684,6 +1739,12 @@ class _ConversationPageState extends State<ConversationPage>
       _sendError = null;
     });
     try {
+      if (media != null) {
+        // The composer shows its own error and keeps the attachment on failure.
+        final sent = await media.sendDraft(caption: text);
+        if (sent && mounted && _input.text.trim() == text) _input.clear();
+        return;
+      }
       await SupabaseService.sendMessage(widget.requestId, text);
       if (mounted && _input.text.trim() == text) {
         _input.clear();
@@ -2026,9 +2087,34 @@ class _ConversationPageState extends State<ConversationPage>
                                                   m['message_type'] ==
                                                       'voice' ||
                                                   m['message_type'] == 'video'
-                                            ? ChatMediaBubble(
-                                                key: ValueKey(m['id']),
-                                                message: m,
+                                            ? Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  ChatMediaBubble(
+                                                    key: ValueKey(m['id']),
+                                                    message: m,
+                                                  ),
+                                                  if (chatMediaCaption(
+                                                        m['body'],
+                                                      )
+                                                      case final caption?)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 6,
+                                                          ),
+                                                      child: Text(
+                                                        caption,
+                                                        style: const TextStyle(
+                                                          color: MaakColors.ink,
+                                                          fontSize: 14,
+                                                          height: 1.4,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
                                               )
                                             : Text(
                                                 m['body']?.toString() ?? '',
@@ -2169,7 +2255,7 @@ class _ConversationPageState extends State<ConversationPage>
                     ),
                   if (!_closed)
                     ChatMediaComposer(
-                      key: ValueKey(widget.requestId),
+                      key: _mediaKey,
                       requestId: widget.requestId,
                       enabled:
                           !_busy &&
@@ -2178,6 +2264,9 @@ class _ConversationPageState extends State<ConversationPage>
                           _statusError == null,
                       onBusy: (value) {
                         if (mounted) setState(() => _mediaBusy = value);
+                      },
+                      onDraftChanged: (value) {
+                        if (mounted) setState(() => _hasMediaDraft = value);
                       },
                     ),
                   if (!_closed && _sendError != null)
@@ -2223,7 +2312,9 @@ class _ConversationPageState extends State<ConversationPage>
                             maxLines: 4,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(
-                              hintText: 'Write a message...',
+                              hintText: _hasMediaDraft
+                                  ? 'Add a caption (optional)...'
+                                  : 'Write a message...',
                               counterText: '',
                               filled: true,
                               fillColor: MaakColors.blush,
@@ -2244,10 +2335,13 @@ class _ConversationPageState extends State<ConversationPage>
                                   _statusLoading ||
                                   _statusError != null ||
                                   _mediaBusy ||
-                                  _input.text.trim().isEmpty
+                                  (_input.text.trim().isEmpty &&
+                                      !_hasMediaDraft)
                               ? null
                               : _send,
-                          tooltip: 'Send message',
+                          tooltip: _hasMediaDraft
+                              ? 'Send attachment'
+                              : 'Send message',
                           style: IconButton.styleFrom(
                             backgroundColor: _sendColor,
                             foregroundColor: Colors.white,
@@ -2459,7 +2553,10 @@ class _RequestCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InitialsAvatar(initials(name)),
+              InitialsAvatar(
+                initials(name),
+                userId: otherParticipantId(request),
+              ),
               const SizedBox(width: MaakSpace.md),
               Expanded(
                 child: Column(
@@ -2503,14 +2600,10 @@ class _RequestCard extends StatelessWidget {
               'Open conversation',
               icon: Icons.chat_bubble_outline,
               compact: true,
-              onPressed: () => Navigator.push(
+              onPressed: () => ConversationPage.open(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ConversationPage(
-                    requestId: request['id'] as String,
-                    name: name,
-                  ),
-                ),
+                requestId: request['id'] as String,
+                name: name,
               ),
             ),
           ],

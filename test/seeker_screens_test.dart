@@ -347,7 +347,7 @@ void main() {
       );
       expect(find.text('Type 1 diabetes'), findsWidgets);
 
-      await _tap(tester, find.text('Find matches'));
+      await _tap(tester, find.byTooltip('Refresh matches'));
       expect(aiFlags(), [false, false]);
       await _tap(tester, find.byType(Switch));
       expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
@@ -355,7 +355,7 @@ void main() {
         false,
         false,
       ], reason: 'switching alone sends nothing');
-      await _tap(tester, find.text('Find matches'));
+      await _tap(tester, find.byTooltip('Refresh matches'));
       expect(aiFlags(), [false, false, true]);
 
       await _tap(tester, find.text('Sara Al-Harbi').last);

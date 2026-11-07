@@ -4,6 +4,7 @@ import 'matching_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../backend/services/supabase_service.dart';
+import '../widgets/user_photo.dart';
 import '../design/components.dart';
 import '../design/tokens.dart';
 import '../widgets/current_user_name.dart';
@@ -296,13 +297,20 @@ class _HomePageState extends State<HomePage> {
     final first = accepted.first;
     final name = first['contact_name'] as String? ?? 'Volunteer';
     return PersonPreviewCard(
+      userId: otherParticipantId(first),
       initials: initials(first['contact_name'] as String? ?? 'Peer'),
       name: name,
       message:
           first['last_message'] as String? ??
           'Say hello and start your conversation.',
-      onTap: () =>
-          _push(ConversationPage(requestId: first['id'] as String, name: name)),
+      onTap: () async {
+        await ConversationPage.open(
+          context,
+          requestId: first['id'] as String,
+          name: name,
+        );
+        if (mounted) setState(_load);
+      },
     );
   }
 

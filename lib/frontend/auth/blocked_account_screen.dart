@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../backend/services/account_status_watcher.dart';
 import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../redesign/app_text_field.dart';
@@ -35,6 +36,7 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
   @override
   void initState() {
     super.initState();
+    AccountStatusWatcher.showingBlockedScreen = true;
     _loadAppeal();
   }
 
@@ -364,6 +366,7 @@ class _AppealDialogState extends State<AppealDialog> {
 
   @override
   void dispose() {
+    AccountStatusWatcher.showingBlockedScreen = false;
     _message.dispose();
     super.dispose();
   }

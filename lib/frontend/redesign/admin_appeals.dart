@@ -1,55 +1,9 @@
 part of 'admin.dart';
 
 // Admin review of account-restriction appeals (20261023_account_appeals.sql),
-// inside Manage Accounts. The server enforces every rule: admin-only, at most
+// on its own tab in the admin navigation bar. The server enforces every rule: admin-only, at most
 // three appeals per block, one pending, and a single decision per appeal.
 // Member-written text is always shown as plain text.
-
-/// Entry point on the Accounts page, in the style of the Overview cards.
-class _AppealsEntryCard extends StatelessWidget {
-  final int pending;
-  final VoidCallback onTap;
-  const _AppealsEntryCard({required this.pending, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => SurfaceCard(
-    onTap: onTap,
-    child: Row(
-      children: [
-        const Icon(
-          Icons.rate_review_outlined,
-          size: 32,
-          color: AppColors.primaryNavy,
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Appeals',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                pending == 0
-                    ? 'No pending appeals'
-                    : pending == 1
-                    ? '1 pending appeal'
-                    : '$pending pending appeals',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Icon(Icons.chevron_right),
-      ],
-    ),
-  );
-}
 
 /// Shown on Account details while the member has a pending appeal.
 class _PendingAppealBanner extends StatelessWidget {
@@ -289,9 +243,13 @@ class _PendingAppealCard extends StatelessWidget {
     onTap: onTap,
     child: Row(
       children: [
-        CircleAvatar(
-          backgroundColor: AppColors.selectedCardFill,
-          child: Text(initials(_accountName(appeal))),
+        UserPhoto(
+          userId: appeal['user_id'] as String?,
+          size: 40,
+          child: CircleAvatar(
+            backgroundColor: AppColors.selectedCardFill,
+            child: Text(initials(_accountName(appeal))),
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -503,10 +461,14 @@ class _AppealDetailPageState extends State<AppealDetailPage> {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: AppColors.selectedCardFill,
-                        child: Text(initials(_name)),
+                      UserPhoto(
+                        userId: _userId,
+                        size: 56,
+                        child: CircleAvatar(
+                          radius: 28,
+                          backgroundColor: AppColors.selectedCardFill,
+                          child: Text(initials(_name)),
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(

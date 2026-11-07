@@ -91,6 +91,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Remove the profile picture(s) too. Skipped if the avatars bucket
+    // doesn't exist yet (profile pictures migration not applied).
+    const avatars = admin.storage.from("avatars");
+    const { data: avatarFiles, error: avatarListError } =
+      await avatars.list(userId, { limit: 100 });
+    if (!avatarListError) {
+      const avatarPaths = (avatarFiles ?? [])
+        .filter((file) => file.name !== ".emptyFolderPlaceholder")
+        .map((file) => `${userId}/${file.name}`);
+      if (avatarPaths.length > 0) {
+        const { error: avatarError } = await avatars.remove(avatarPaths);
+        if (avatarError) {
+          return respond("Unable to remove your profile photo. Please try again.", 500);
+        }
+      }
+    }
+
     // Database foreign keys with ON DELETE CASCADE remove dependent rows.
     const { error: deleteError } =
       await admin.auth.admin.deleteUser(userId);

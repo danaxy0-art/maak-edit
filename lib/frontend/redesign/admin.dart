@@ -13,6 +13,8 @@ import 'app_text_field.dart';
 import 'profile.dart';
 import 'feedback.dart';
 import 'condition_reviews.dart';
+import '../widgets/user_photo.dart';
+import '../../backend/services/push_notification_service.dart';
 import 'report_message.dart' show kReportReasons;
 
 part 'admin_accounts.dart';
@@ -50,14 +52,18 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
+  static const appealsTab = 4;
   final _navigator = GlobalKey<NavigatorState>();
   int _index = 0;
+  int _pendingAppeals = 0;
   Widget _page(int index) => index == 1
       ? const ApplicationsPage()
       : index == 2
       ? const ConditionsAdminPage()
       : index == 3
       ? const AccountsAdminPage()
+      : index == appealsTab
+      ? const AppealsAdminPage()
       : AdminOverview(select: _select);
   void _select(int index) {
     setState(() => _index = index);
@@ -65,6 +71,39 @@ class _AdminShellState extends State<AdminShell> {
       MaterialPageRoute(builder: (_) => _page(index)),
       (_) => false,
     );
+    _loadAppealCount();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppealCount();
+    PushNotificationService.pendingAdminTab.addListener(_openRequestedTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openRequestedTab());
+  }
+
+  @override
+  void dispose() {
+    PushNotificationService.pendingAdminTab.removeListener(_openRequestedTab);
+    super.dispose();
+  }
+
+  // A tapped "New account appeal" push asks for the Appeals tab.
+  void _openRequestedTab() {
+    final tab = PushNotificationService.pendingAdminTab.value;
+    if (!mounted || tab == null || _navigator.currentState == null) return;
+    PushNotificationService.pendingAdminTab.value = null;
+    _select(tab);
+  }
+
+  // Badge on the Appeals tab; refreshed whenever the admin switches tabs.
+  Future<void> _loadAppealCount() async {
+    try {
+      final rows = await SupabaseService.getPendingAppeals();
+      if (mounted) setState(() => _pendingAppeals = rows?.length ?? 0);
+    } catch (_) {
+      // Keep the last count; the Appeals page shows its own errors.
+    }
   }
 
   @override
@@ -79,11 +118,22 @@ class _AdminShellState extends State<AdminShell> {
     bottomNavigationBar: MaakNavBar(
       currentIndex: _index,
       onTap: _select,
-      items: const [
-        MaakNavItem(icon: Icons.home_outlined, label: 'Overview'),
-        MaakNavItem(icon: Icons.description_outlined, label: 'Applications'),
-        MaakNavItem(icon: Icons.favorite_border, label: 'Conditions'),
-        MaakNavItem(icon: Icons.manage_accounts_outlined, label: 'Accounts'),
+      items: [
+        const MaakNavItem(icon: Icons.home_outlined, label: 'Overview'),
+        const MaakNavItem(
+          icon: Icons.description_outlined,
+          label: 'Applications',
+        ),
+        const MaakNavItem(icon: Icons.favorite_border, label: 'Conditions'),
+        const MaakNavItem(
+          icon: Icons.manage_accounts_outlined,
+          label: 'Accounts',
+        ),
+        MaakNavItem(
+          icon: Icons.rate_review_outlined,
+          label: 'Appeals',
+          unreadCount: _pendingAppeals,
+        ),
       ],
     ),
   );
@@ -286,9 +336,13 @@ class _AdminOverviewState extends State<AdminOverview> {
                             },
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: AppColors.selectedCardFill,
-                                  child: Text(initials(_appName(row))),
+                                UserPhoto(
+                                  userId: row['user_id'] as String?,
+                                  size: 40,
+                                  child: CircleAvatar(
+                                    backgroundColor: AppColors.selectedCardFill,
+                                    child: Text(initials(_appName(row))),
+                                  ),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
@@ -369,6 +423,8 @@ class _AdminOverviewState extends State<AdminOverview> {
   );
 }
 
+enum _ApplicationFilter { all, pending, accepted, rejected }
+
 class ApplicationsPage extends StatefulWidget {
   const ApplicationsPage({super.key});
 
@@ -379,6 +435,73 @@ class ApplicationsPage extends StatefulWidget {
 class _ApplicationsPageState extends State<ApplicationsPage> {
   late Future<List<Map<String, dynamic>>> _future;
   String _search = '';
+  // Pending first: those are the applications waiting for a decision.
+  _ApplicationFilter _filter = _ApplicationFilter.pending;
+
+  bool _inFilter(Map<String, dynamic> row) => switch (_filter) {
+    _ApplicationFilter.all => true,
+    _ApplicationFilter.pending => row['status'] == 'pending_review',
+    _ApplicationFilter.accepted => row['status'] == 'approved',
+    _ApplicationFilter.rejected => row['status'] == 'rejected',
+  };
+
+  // Same look as the Accounts page filter.
+  Widget _filters(List<Map<String, dynamic>> all) {
+    int count(String status) => all.where((r) => r['status'] == status).length;
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_ApplicationFilter>(
+        showSelectedIcon: false,
+        segments: [
+          ButtonSegment(
+            value: _ApplicationFilter.all,
+            label: _FilterLabel('All (${all.length})'),
+          ),
+          ButtonSegment(
+            value: _ApplicationFilter.pending,
+            label: _FilterLabel('Pending (${count('pending_review')})'),
+          ),
+          ButtonSegment(
+            value: _ApplicationFilter.accepted,
+            label: _FilterLabel('Accepted (${count('approved')})'),
+          ),
+          ButtonSegment(
+            value: _ApplicationFilter.rejected,
+            label: _FilterLabel('Rejected (${count('rejected')})'),
+          ),
+        ],
+        selected: {_filter},
+        onSelectionChanged: (value) => setState(() => _filter = value.first),
+      ),
+    );
+  }
+
+  Widget _filteredEmptyState() {
+    if (_search.isNotEmpty) {
+      return const EmptyState(
+        'No matching applications',
+        'Try a different search or filter.',
+      );
+    }
+    return switch (_filter) {
+      _ApplicationFilter.pending => const EmptyState(
+        'No pending applications',
+        'New applications waiting for review will appear here.',
+      ),
+      _ApplicationFilter.accepted => const EmptyState(
+        'No accepted applications',
+        'Approved volunteers will appear here.',
+      ),
+      _ApplicationFilter.rejected => const EmptyState(
+        'No rejected applications',
+        'Applications that were not approved will appear here.',
+      ),
+      _ApplicationFilter.all => const EmptyState(
+        'No matching applications',
+        'Try a different search or filter.',
+      ),
+    };
+  }
   final _searchController = TextEditingController();
   @override
   void initState() {
@@ -461,6 +584,7 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final rows = snapshot.data!.where((row) {
+                  if (!_inFilter(row)) return false;
                   if (_search.isEmpty) return true;
                   final name = _appName(row).toLowerCase();
                   final condition =
@@ -476,18 +600,17 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                   onRefresh: _pullToRefresh,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                     children: [
+                      _filters(snapshot.data!),
+                      const SizedBox(height: 16),
                       if (snapshot.data!.isEmpty)
                         const EmptyState(
                           'No applications yet',
                           'Submitted applications will appear here.',
                         ),
                       if (rows.isEmpty && snapshot.data!.isNotEmpty)
-                        const EmptyState(
-                          'No matching applications',
-                          'Try a different search.',
-                        ),
+                        _filteredEmptyState(),
                       for (final row in rows)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
@@ -504,9 +627,13 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                             },
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: AppColors.selectedCardFill,
-                                  child: Text(initials(_appName(row))),
+                                UserPhoto(
+                                  userId: row['user_id'] as String?,
+                                  size: 40,
+                                  child: CircleAvatar(
+                                    backgroundColor: AppColors.selectedCardFill,
+                                    child: Text(initials(_appName(row))),
+                                  ),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
@@ -1080,10 +1207,14 @@ class _ApplicationDetailPageState extends State<ApplicationDetailPage> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppColors.selectedCardFill,
-                  child: Text(initials(_appName(a))),
+                UserPhoto(
+                  userId: a['user_id'] as String?,
+                  size: 56,
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: AppColors.selectedCardFill,
+                    child: Text(initials(_appName(a))),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

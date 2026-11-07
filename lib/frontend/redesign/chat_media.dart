@@ -11,21 +11,30 @@ import '../../backend/services/supabase_service.dart';
 import '../../backend/chat/chat_media_policy.dart';
 import 'feedback.dart';
 
+/// Picks, records and previews one attachment. It has no Send button of its
+/// own: the chat's Send button calls [ChatMediaComposerState.sendDraft] (through
+/// a GlobalKey) with the typed text as the caption.
 class ChatMediaComposer extends StatefulWidget {
   final String requestId;
   final bool enabled;
+
+  /// True while picking, recording, or uploading.
   final ValueChanged<bool> onBusy;
+
+  /// True while an attachment is ready to send.
+  final ValueChanged<bool> onDraftChanged;
   const ChatMediaComposer({
     super.key,
     required this.requestId,
     required this.enabled,
     required this.onBusy,
+    required this.onDraftChanged,
   });
   @override
-  State<ChatMediaComposer> createState() => _ChatMediaComposerState();
+  State<ChatMediaComposer> createState() => ChatMediaComposerState();
 }
 
-class _ChatMediaComposerState extends State<ChatMediaComposer>
+class ChatMediaComposerState extends State<ChatMediaComposer>
     with WidgetsBindingObserver {
   final _recorder = AudioRecorder();
   final _preview = AudioPlayer();
@@ -40,7 +49,42 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
   void _setBusy(bool value) {
     if (!mounted) return;
     setState(() => _busy = value);
-    widget.onBusy(value || _recording || _draft != null);
+    widget.onBusy(value || _recording);
+  }
+
+  bool get hasDraft => _draft != null;
+
+  void _setDraft(ChatAttachment? draft) {
+    if (!mounted) return;
+    setState(() {
+      _draft = draft;
+      if (draft == null) _previewPlaying = false;
+    });
+    widget.onDraftChanged(draft != null);
+  }
+
+  /// Sends the attachment with [caption]. Returns true once it's sent; on
+  /// failure the attachment is kept and the error is shown here.
+  Future<bool> sendDraft({String caption = ''}) async {
+    final draft = _draft;
+    if (_busy || draft == null) return false;
+    _setBusy(true);
+    try {
+      await _preview.stop();
+      await ChatMediaService.send(widget.requestId, draft, caption: caption);
+      if (mounted) setState(() => _error = null);
+      _setDraft(null);
+      return true;
+    } catch (error) {
+      if (mounted)
+        setState(
+          () => _error =
+              'Not sent. Your attachment is kept. ${friendlyError(error)}',
+        );
+      return false;
+    } finally {
+      _setBusy(false);
+    }
   }
 
   @override
@@ -101,16 +145,17 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
         final image = await decodeImageFromList(file.bytes!);
         image.dispose();
       }
-      if (mounted)
-        setState(() {
-          _draft = ChatAttachment(
+      if (mounted) {
+        setState(() => _error = null);
+        _setDraft(
+          ChatAttachment(
             id: const Uuid().v4(),
             kind: video ? 'video' : 'image',
             mime: mime,
             bytes: file.bytes!,
-          );
-          _error = null;
-        });
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) setState(() => _error = friendlyError(error));
     } finally {
@@ -195,8 +240,8 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
       final pcm = _pcm.takeBytes();
       if (!discard && mounted && widget.enabled) {
         final wav = voiceWav(pcm);
-        setState(
-          () => _draft = ChatAttachment(
+        _setDraft(
+          ChatAttachment(
             id: const Uuid().v4(),
             kind: 'voice',
             mime: 'audio/wav',
@@ -212,30 +257,6 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
         setState(() => _recording = false);
         _setBusy(false);
       }
-    }
-  }
-
-  Future<void> _send() async {
-    final draft = _draft;
-    if (_busy || draft == null || !widget.enabled) return;
-    _setBusy(true);
-    try {
-      await _preview.stop();
-      await ChatMediaService.send(widget.requestId, draft);
-      if (mounted)
-        setState(() {
-          _draft = null;
-          _error = null;
-          _previewPlaying = false;
-        });
-    } catch (error) {
-      if (mounted)
-        setState(
-          () => _error =
-              'Not sent. Your attachment is kept. ${friendlyError(error)}',
-        );
-    } finally {
-      _setBusy(false);
     }
   }
 
@@ -292,11 +313,13 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
               ),
             Expanded(
               child: Text(
-                draft.kind == 'voice'
+                _busy
+                    ? 'Sending…'
+                    : draft.kind == 'voice'
                     ? 'Voice message · ${(draft.durationMs! / 1000).ceil()}s'
                     : draft.kind == 'video'
-                    ? 'MP4 video ready to send'
-                    : 'Photo ready to send',
+                    ? 'MP4 video attached'
+                    : 'Photo attached',
               ),
             ),
             IconButton(
@@ -305,20 +328,10 @@ class _ChatMediaComposerState extends State<ChatMediaComposer>
                   ? null
                   : () async {
                       await _preview.stop();
-                      if (mounted) {
-                        setState(() {
-                          _draft = null;
-                          _error = null;
-                          _previewPlaying = false;
-                        });
-                        widget.onBusy(false);
-                      }
+                      if (mounted) setState(() => _error = null);
+                      _setDraft(null);
                     },
               icon: const Icon(Icons.delete_outline),
-            ),
-            FilledButton(
-              onPressed: _busy || !widget.enabled ? null : _send,
-              child: Text(_busy ? 'Sending…' : 'Send'),
             ),
           ],
         ),

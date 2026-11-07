@@ -14,6 +14,7 @@ import 'ai_consent.dart';
 import 'multi_condition_field.dart';
 import 'registration.dart';
 import 'feedback.dart';
+import 'profile_avatar.dart';
 
 class ProfilePage extends StatefulWidget {
   final String role;
@@ -276,17 +277,8 @@ class _ProfilePageState extends State<ProfilePage> {
               padding: const EdgeInsets.fromLTRB(20, 15, 20, 28),
               children: [
                 Center(
-                  child: CircleAvatar(
-                    radius: 48,
-                    backgroundColor: MaakColors.blush,
-                    child: Text(
-                      initials(p['full_name'] as String? ?? ''),
-                      style: const TextStyle(
-                        fontFamily: 'DMSans',
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  child: ProfileAvatarEditor(
+                    name: p['full_name'] as String? ?? '',
                   ),
                 ),
                 const SizedBox(height: 18),

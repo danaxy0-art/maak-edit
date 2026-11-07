@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import 'ui.dart';
 import 'feedback.dart';
 import 'support.dart';
+import 'matching_page.dart';
 
 class NotificationBell extends StatefulWidget {
   const NotificationBell({super.key});
@@ -81,14 +82,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
               n['kind'] == 'chat_reopen' ||
               n['kind'] == 'restricted') &&
           n['reference_id'] != null) {
+        ConversationPage.open(
+          context,
+          requestId: n['reference_id'] as String,
+          name: 'Conversation',
+        );
+      } else if (n['kind'] == 'match') {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => ConversationPage(
-              requestId: n['reference_id'] as String,
-              name: 'Conversation',
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => const MatchingPage()),
         );
       } else if (n['kind'] == 'request') {
         final role = await SupabaseService.getMyRole();
@@ -169,6 +171,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: Icon(
               n['kind'] == 'message'
                   ? Icons.chat_bubble_outline
+                  : n['kind'] == 'match'
+                  ? Icons.people_outline
                   : n['kind'] == 'restricted'
                   ? Icons.admin_panel_settings_outlined
                   : Icons.notifications_outlined,

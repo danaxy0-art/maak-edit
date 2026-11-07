@@ -20,6 +20,9 @@ class _NavIcon extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: size,
     height: size,
+    // Centers the Badge itself: a visible badge wraps the icon in a Stack, which
+    // would otherwise pin the icon to the top-start corner and make it jump.
+    alignment: Alignment.center,
     decoration: BoxDecoration(
       color: selected ? MaakColors.selected : Colors.transparent,
       shape: BoxShape.circle,
