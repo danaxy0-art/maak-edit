@@ -1125,20 +1125,47 @@ class _ConversationPageState extends State<ConversationPage>
             ),
           ],
         ),
+        // Slightly wider dialog; both buttons always side by side.
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
         actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep chatting'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: _dangerColor,
-              foregroundColor: Colors.white,
-            ),
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            label: const Text('End chat'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Keep chatting', maxLines: 1),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _dangerColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 14,
+                    ),
+                  ),
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('End chat', maxLines: 1),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
