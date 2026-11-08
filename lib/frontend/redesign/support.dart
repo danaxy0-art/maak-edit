@@ -1249,7 +1249,7 @@ class _ConversationPageState extends State<ConversationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Youظآve reached the maximum of 3 reopen requests for this closure.',
+              'You’ve reached the maximum of 3 reopen requests for this closure.',
             ),
           ),
         );
@@ -1490,7 +1490,7 @@ class _ConversationPageState extends State<ConversationPage>
               Text('Reopen requests: 3 of 3', textAlign: TextAlign.center),
               SizedBox(height: 6),
               Text(
-                'Youظآve reached the maximum of 3 reopen requests for this closure.',
+                'You’ve reached the maximum of 3 reopen requests for this closure.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -2226,7 +2226,7 @@ class _ConversationPageState extends State<ConversationPage>
                                             height: 40,
                                             child: IconButton(
                                               tooltip:
-                                                  'Message options آ· Delete',
+                                                  'Message options · Delete',
                                               onPressed: _deletingMessage
                                                   ? null
                                                   : () => _messageOptions(m),
@@ -2278,8 +2278,8 @@ class _ConversationPageState extends State<ConversationPage>
                           Flexible(
                             child: Text(
                               _restricted
-                                  ? 'An administrator ended this chat â€” you can no longer send messages.'
-                                  : 'Chat ended â€” you can no longer send messages.',
+                                  ? 'An administrator ended this chat — you can no longer send messages.'
+                                  : 'Chat ended — you can no longer send messages.',
                               style: const TextStyle(color: MaakColors.muted),
                               textAlign: TextAlign.center,
                             ),
@@ -2788,7 +2788,7 @@ class ResourcesPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Read resource ظْ',
+            'Read resource →',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -2805,5 +2805,5 @@ String formatDate(String date) {
       : d.hour > 12
       ? d.hour - 12
       : d.hour;
-  return '${d.day}/${d.month}/${d.year} ┬╖ $hour:$minutes ${d.hour >= 12 ? 'PM' : 'AM'}';
+  return '${d.day}/${d.month}/${d.year} · $hour:$minutes ${d.hour >= 12 ? 'PM' : 'AM'}';
 }

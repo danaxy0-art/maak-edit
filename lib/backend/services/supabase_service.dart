@@ -594,6 +594,8 @@ class SupabaseService {
       'admin_block_account',
       params: {'p_user_id': userId, 'p_reason': reason.trim()},
     );
+    // Tell the member's open app right away (AccountStatusWatcher).
+    unawaited(signalAccountStatusChange(userId));
   }
 
   static Future<void> reactivateAccount({
@@ -607,6 +609,30 @@ class SupabaseService {
       'admin_reactivate_account',
       params: {'p_user_id': userId, 'p_note': trimmed.isEmpty ? null : trimmed},
     );
+    unawaited(signalAccountStatusChange(userId));
+  }
+
+  /// Realtime broadcast channel for one member's account status.
+  static String accountStatusChannel(String userId) => 'maak-account-$userId';
+
+  /// Sends a Realtime broadcast so that member's open app re-checks its
+  /// account status immediately. It is only a hint: the app asks the server
+  /// (my_block_status) before changing screens, so a forged message can't
+  /// restrict anyone. Needs no database setup. Failures are ignored; the
+  /// app's own periodic check is the fallback.
+  static Future<void> signalAccountStatusChange(String userId) async {
+    final channel = client.channel(accountStatusChannel(userId));
+    try {
+      // Not subscribed, so this is delivered over HTTPS (no socket needed).
+      await channel.sendBroadcastMessage(
+        event: 'status',
+        payload: <String, dynamic>{},
+      );
+    } catch (error) {
+      debugPrint('Account status broadcast failed: $error');
+    } finally {
+      await client.removeChannel(channel);
+    }
   }
 
   /// The signed-in user's block, or null when the account is active.

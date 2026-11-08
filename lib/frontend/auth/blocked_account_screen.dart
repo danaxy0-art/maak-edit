@@ -36,8 +36,14 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
   @override
   void initState() {
     super.initState();
-    AccountStatusWatcher.showingBlockedScreen = true;
+    AccountStatusWatcher.blockedScreenOpened();
     _loadAppeal();
+  }
+
+  @override
+  void dispose() {
+    AccountStatusWatcher.blockedScreenClosed();
+    super.dispose();
   }
 
   Future<void> _loadAppeal() async {
@@ -429,7 +435,6 @@ class _AppealDialogState extends State<AppealDialog> {
 
   @override
   void dispose() {
-    AccountStatusWatcher.showingBlockedScreen = false;
     _message.dispose();
     super.dispose();
   }

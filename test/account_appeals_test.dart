@@ -760,7 +760,18 @@ void main() {
       expect(find.text('4 (after 90-day wait)'), findsOneWidget);
     });
 
-    testWidgets('Accounts shows the pending count and opens Appeals', (
+    // Appeals moved from a card on Accounts to its own admin tab (AdminShell),
+    // so Accounts only marks members with a pending appeal; the count and
+    // search live on the Appeals page.
+    testWidgets('Accounts marks members with a pending appeal', (tester) async {
+      pending = [pendingAppeal()];
+      await pumpAt(tester, const AccountsAdminPage(), phone);
+      expect(find.text('Appeal pending'), findsOneWidget);
+      expect(find.text('Huda Ali'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Appeals shows the pending count and searches', (
       tester,
     ) async {
       pending = [
@@ -773,11 +784,7 @@ void main() {
           'username': 'omar',
         },
       ];
-      await pumpAt(tester, const AccountsAdminPage(), phone);
-      expect(find.text('2 pending appeals'), findsOneWidget);
-      expect(find.text('Appeal pending'), findsOneWidget);
-      await tester.tap(find.text('Appeals'));
-      await settle(tester);
+      await pumpAt(tester, const AppealsAdminPage(), phone);
       expect(find.text('2 pending appeals'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'omar@');
       await tester.pumpAndSettle();
@@ -789,7 +796,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Appeals card hidden when the migration is not installed', (
+    testWidgets('Accounts still loads when the appeals migration is missing', (
       tester,
     ) async {
       overrides['admin_pending_appeals'] = (
@@ -797,8 +804,8 @@ void main() {
         {'code': 'PGRST202', 'message': 'Could not find the function'},
       );
       await pumpAt(tester, const AccountsAdminPage(), phone);
-      expect(find.text('Appeals'), findsNothing);
       expect(find.text('Huda Ali'), findsOneWidget);
+      expect(find.text('Appeal pending'), findsNothing);
     });
 
     testWidgets('empty, error and pull-to-refresh states', (tester) async {

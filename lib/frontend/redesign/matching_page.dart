@@ -63,8 +63,10 @@ class _MatchingPageState extends State<MatchingPage> {
             ),
           ]
         : [
-            const _MatchingIntro(),
-            const SizedBox(height: MaakSpace.xl),
+            // Phones: a compact bar keeps the matches on the first screen;
+            // the full intro opens from its info button.
+            const _MatchingIntroBar(),
+            const SizedBox(height: MaakSpace.lg),
             _results(wide),
           ],
   );
@@ -202,8 +204,89 @@ class _MatchingPageState extends State<MatchingPage> {
   }
 }
 
-/// Colourful intro beside (tablet) or above (phone) the results: what the
-/// page is and how matches are ranked, in the app's glowing hero style.
+/// Phone header: the intro's title and a one-line summary, in the same hero
+/// style. The info button shows the full intro card as a pop-up.
+class _MatchingIntroBar extends StatelessWidget {
+  const _MatchingIntroBar();
+
+  void _showIntro(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (context) => Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.all(MaakSpace.lg),
+      child: Stack(
+        children: [
+          const _MatchingIntro(),
+          PositionedDirectional(
+            top: MaakSpace.sm,
+            end: MaakSpace.sm,
+            child: IconButton(
+              tooltip: 'Close',
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close, color: MaakColors.ink),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsetsDirectional.fromSTEB(
+      MaakSpace.lg,
+      MaakSpace.md,
+      MaakSpace.xs,
+      MaakSpace.md,
+    ),
+    decoration: BoxDecoration(
+      gradient: MaakGradients.orb,
+      borderRadius: BorderRadius.circular(MaakRadius.hero),
+    ),
+    child: Row(
+      children: [
+        const IconBadge(
+          Icons.volunteer_activism_outlined,
+          size: 36,
+          color: Color(0xC0FFFFFF),
+        ),
+        const SizedBox(width: MaakSpace.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  'Support that understands you',
+                  style: MaakText.greeting.copyWith(fontSize: 17),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Matched to the conditions in your profile.',
+                style: MaakText.body.copyWith(
+                  color: MaakColors.ink,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'How matching works',
+          onPressed: () => _showIntro(context),
+          icon: const Icon(Icons.info_outline, color: MaakColors.ink),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Colourful intro beside the results on tablets, and the pop-up behind the
+/// phone bar's info button: what the page is and how matches are ranked.
 class _MatchingIntro extends StatelessWidget {
   final bool large;
   const _MatchingIntro({this.large = false});
