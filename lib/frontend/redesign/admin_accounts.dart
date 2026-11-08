@@ -1048,20 +1048,50 @@ class _ModerationDialog extends StatelessWidget {
           ],
         ),
       ),
+      // Slightly wider dialog so both buttons fit side by side at full size.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      // Always one row: Cancel, then the action, equal widths.
       actions: [
-        OutlinedButton(
-          onPressed: busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: busy ? null : onConfirm,
-          style: destructive
-              ? FilledButton.styleFrom(backgroundColor: AppColors.error)
-              : null,
-          child: Text(busy ? busyConfirm : confirm),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: busy ? null : () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(padding: _buttonPadding),
+                child: const _OneLine('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: busy ? null : onConfirm,
+                style: FilledButton.styleFrom(
+                  padding: _buttonPadding,
+                  backgroundColor: destructive ? AppColors.error : null,
+                ),
+                child: _OneLine(busy ? busyConfirm : confirm),
+              ),
+            ),
+          ],
         ),
       ],
     ),
+  );
+
+  static const _buttonPadding = EdgeInsets.symmetric(
+    horizontal: 8,
+    vertical: 14,
+  );
+}
+
+/// Button label kept on one line; shrinks only if a phone is unusually narrow.
+class _OneLine extends StatelessWidget {
+  final String text;
+  const _OneLine(this.text);
+  @override
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(text, maxLines: 1),
   );
 }
 
