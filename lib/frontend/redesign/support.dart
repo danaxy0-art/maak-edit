@@ -5,6 +5,7 @@ import 'matching_page.dart';
 import 'feedback.dart'; //add
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../backend/services/supabase_service.dart';
@@ -804,6 +805,11 @@ class ConversationsPage extends StatelessWidget {
 }
 
 class ConversationPage extends StatefulWidget {
+  /// How often an open chat re-checks whether it was ended or reopened
+  /// (fallback for the instant broadcast). Tests may lengthen it.
+  @visibleForTesting
+  static Duration statusPollInterval = const Duration(seconds: 5);
+
   final String requestId, name;
 
   /// Test hook: replaces the notification stream used to notice an
@@ -910,14 +916,26 @@ class _ConversationPageState extends State<ConversationPage>
     _stream = SupabaseService.messageStream(widget.requestId);
     _reactionsStream = SupabaseService.chatReactionsStream(widget.requestId);
     _reopenFuture = _fetchReopenRequests();
-    _reopenRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && _ended && !_restricted && !_reopenBusy) {
-        _refreshReopenRequests();
-        // support_requests isn't streamed live, so check whether the chat
-        // was reopened (fallback for the notification listener below).
-        _loadStatus();
-      }
+    _reopenRefreshTimer = Timer.periodic(ConversationPage.statusPollInterval, (
+      _,
+    ) {
+      if (!mounted || _restricted || _reopenBusy) return;
+      if (_ended) _refreshReopenRequests();
+      // support_requests isn't streamed live: check whether the other person
+      // ended or reopened the chat (fallback for the broadcast below).
+      _loadStatus(quiet: true);
     });
+    // Instant: the other participant's app broadcasts after ending or
+    // reopening this chat; the status itself is always read from the server.
+    _chatChannel = SupabaseService.client
+        .channel(SupabaseService.chatStatusChannel(widget.requestId))
+        .onBroadcast(
+          event: 'status',
+          callback: (_) {
+            if (mounted) _loadStatus(quiet: true);
+          },
+        )
+        .subscribe();
     // Reopen requests and decisions create 'chat_reopen' notifications, which
     // ARE streamed live: refresh at once when one arrives for this chat.
     _reopenNoticeSubscription = SupabaseService.notificationStream().listen(
@@ -981,6 +999,7 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   StreamSubscription<List<Map<String, dynamic>>>? _reopenNoticeSubscription;
+  RealtimeChannel? _chatChannel;
   Set<String>? _seenReopenNotices; // null until the first snapshot
 
   void _onNotices(List<Map<String, dynamic>> rows) {
@@ -1004,6 +1023,8 @@ class _ConversationPageState extends State<ConversationPage>
     _statusSubscription?.cancel();
     _reopenNoticeSubscription?.cancel();
     _restrictionSubscription?.cancel();
+    final chatChannel = _chatChannel;
+    if (chatChannel != null) SupabaseService.client.removeChannel(chatChannel);
     WidgetsBinding.instance.removeObserver(this);
     _input.removeListener(_refreshInput);
     _scroll.dispose();
@@ -1019,7 +1040,10 @@ class _ConversationPageState extends State<ConversationPage>
     }
   }
 
-  Future<void> _loadStatus() async {
+  /// [quiet]: a background check. If it fails (e.g. a brief connection
+  /// drop), keep the current state instead of showing an error that would
+  /// block sending.
+  Future<void> _loadStatus({bool quiet = false}) async {
     try {
       final status = await SupabaseService.client
           .from('support_requests')
@@ -1042,7 +1066,7 @@ class _ConversationPageState extends State<ConversationPage>
         });
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && !quiet) {
         setState(() {
           _statusLoading = false;
           _statusError = 'Could not check conversation status.';

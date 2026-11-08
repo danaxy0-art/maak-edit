@@ -1137,6 +1137,33 @@ class SupabaseService {
 
   static Future<void> endChat(String requestId) async {
     await client.rpc('end_maak_chat', params: {'p_request_id': requestId});
+    // The other participant's open chat updates at once (ConversationPage).
+    unawaited(signalChatStatusChange(requestId));
+  }
+
+  /// Realtime broadcast channel for one conversation's status.
+  static String chatStatusChannel(String requestId) => 'maak-chat-$requestId';
+
+  /// support_requests isn't streamed live, so after ending or reopening a
+  /// chat, nudge both participants' open chat screens to reload its status.
+  /// Only a hint: the screen reads the status from the server.
+  static Future<void> signalChatStatusChange(String requestId) =>
+      _nudge(chatStatusChannel(requestId));
+
+  // Sends an empty Realtime broadcast over HTTPS (no socket needed).
+  // Failures are ignored; screens also re-check on a timer.
+  static Future<void> _nudge(String channelName) async {
+    final channel = client.channel(channelName);
+    try {
+      await channel.sendBroadcastMessage(
+        event: 'status',
+        payload: <String, dynamic>{},
+      );
+    } catch (error) {
+      debugPrint('Status broadcast failed: $error');
+    } finally {
+      await client.removeChannel(channel);
+    }
   }
 
   // Chat reopen: only the participant who ended the chat may request it.
@@ -1157,6 +1184,7 @@ class SupabaseService {
       'decide_maak_chat_reopen',
       params: {'p_request_id': requestId, 'p_accept': accept},
     );
+    if (accept) unawaited(signalChatStatusChange(requestId));
   }
 
   static Stream<List<Map<String, dynamic>>> chatReopenRequestsStream(

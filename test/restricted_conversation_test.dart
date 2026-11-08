@@ -234,6 +234,11 @@ void main() {
     });
 
     testScreen('a restriction for another conversation is ignored', (t) async {
+      // Counts status reloads, so keep the periodic status check out of it.
+      ConversationPage.statusPollInterval = const Duration(hours: 1);
+      addTearDown(
+        () => ConversationPage.statusPollInterval = const Duration(seconds: 5),
+      );
       final notes = StreamController<List<Map<String, dynamic>>>.broadcast();
       addTearDown(notes.close);
       final chat = await open(t, notifications: notes.stream);
