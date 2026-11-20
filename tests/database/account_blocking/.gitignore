@@ -1,0 +1,9 @@
+# Working files written by run_tests.sh and 30_concurrency.sh
+.results.txt
+.step.err
+step.err
+c.a
+c.b
+c.c
+.before.txt
+.after.txt

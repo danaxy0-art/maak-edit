@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createEmailCheckHandler} from '../../supabase/functions/check-registration-email/handler.mjs';
+const req=input=>new Request('https://example.test',{method:'POST',body:JSON.stringify(input)});
+const handler=(check=async()=>({data:{exists:true}}))=>createEmailCheckHandler({check,clientHash:async()=> 'hash'});
+test('same role-free response for any registered email',async()=>{const r=await handler()(req({email:'a@example.com'}));assert.deepEqual(await r.json(),{exists:true});assert.equal(r.headers.get('Cache-Control'),'no-store');});
+test('new email is available',async()=>assert.deepEqual(await(await handler(async()=>({data:{exists:false}}))(req({email:'new@example.com'}))).json(),{exists:false}));
+test('normalizes before invoking server',async()=>{await handler(async(email)=>{assert.equal(email,'a@example.com');return{data:{exists:false}};})(req({email:' A@EXAMPLE.COM '}));});
+test('invalid inputs do not query auth',async()=>{for(const input of [{email:'bad'},{email:123},{},{email:'a'.repeat(250)+'@example.com'}]){const r=await handler(()=>{throw Error('should not query');})(req(input));assert.equal(r.status,400);}});
+test('rate limit gives retry response without account information',async()=>{const r=await handler(async()=>({data:{limited:true}}))(req({email:'a@example.com'}));assert.equal(r.status,429);assert.deepEqual(await r.json(),{error:'too_many_checks'});});
+test('database and deployment failures never mean email available',async()=>{for(const check of [async()=>({error:{secret:'hidden'}}),async()=>{throw Error('secret')},async()=>({data:null})]){const r=await handler(check)(req({email:'a@example.com'}));assert.equal(r.status,503);assert.deepEqual(await r.json(),{error:'check_unavailable'});}});
+test('reject malformed JSON and oversized payload',async()=>{for(const body of ['{','x'.repeat(1025)])assert.equal((await handler()(new Request('https://example.test',{method:'POST',body}))).status,400);});
+test('preflight succeeds and non-POST rejected',async()=>{assert.equal((await handler()(new Request('https://example.test',{method:'OPTIONS'}))).status,200);assert.equal((await handler()(new Request('https://example.test'))).status,405);});

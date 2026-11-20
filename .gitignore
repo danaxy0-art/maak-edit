@@ -1,0 +1,74 @@
+# Ma'ak (Flutter + Supabase). Platform folders keep their own rules in
+# android/.gitignore and ios/.gitignore; test helpers in tests/database/*/.gitignore.
+
+# --- Flutter / Dart generated files and build outputs ---
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+# pubspec.lock is tracked on purpose: everyone builds with the same package versions.
+
+# Directory created by dartdoc
+doc/api/
+
+# dart2js output (generated JavaScript). Hand-written JS such as
+# web/firebase-messaging-sw.js stays tracked, so there is no blanket *.js rule.
+*.dart.js
+*.info.json
+*.js_
+*.js.deps
+*.js.map
+
+# Golden-test failure images written by `flutter test` (the goldens themselves stay tracked)
+test/**/failures/
+
+# --- Platform temporary files (Android/iOS rules live in their own folders) ---
+android/local.properties
+android/.kotlin/
+**/Flutter/ephemeral/
+**/flutter/ephemeral/
+**/Pods/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# --- IDEs (the shared .vscode/settings.json stays tracked) ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*.log
+
+# --- Local environment files and secrets ---
+.env*
+!.env.example
+# Signing keys and server credentials must never be committed. The app's Firebase
+# client config (google-services.json, firebase_options.dart) is not a secret.
+*.jks
+*.keystore
+key.properties
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+*service-account*.json
+*-firebase-adminsdk-*.json
+.firebase/
+
+# --- Supabase CLI local state (migrations, checks, rollbacks and functions stay tracked) ---
+supabase/.temp/
+supabase/.branches/
+
+# --- Logs, caches and scratch files ---
+*.log
+*.tmp
+node_modules/
+
+# --- OS-generated files ---
+.DS_Store
+__MACOSX/
+Thumbs.db
+ehthumbs.db
+desktop.ini

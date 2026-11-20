@@ -1,0 +1,770 @@
+import 'package:flutter/material.dart';
+import '../design/components.dart';
+import '../design/tokens.dart';
+import '../theme/app_theme.dart';
+import '../widgets/maak_logo.dart';
+
+// Shared building blocks of the original screens. Their names and parameters
+// are kept so every screen keeps its structure; their appearance follows the
+// redesign tokens (blush canvas, white hairline cards, dark pill buttons).
+
+class ResponsiveBody extends StatelessWidget {
+  final Widget child;
+  const ResponsiveBody({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxWidth: MaakBreakpoints.phoneMaxContent,
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// Every route shares the blush-to-white canvas. The name is kept from the
+/// earlier botanical design so existing screens need no change.
+class BotanicalScaffold extends StatelessWidget {
+  final PreferredSizeWidget? appBar;
+  final Widget? body, bottomNavigationBar;
+  const BotanicalScaffold({
+    super.key,
+    this.appBar,
+    this.body,
+    this.bottomNavigationBar,
+  });
+  // The canvas sits behind the whole Scaffold, so a transparent app bar
+  // shares one continuous gradient with the body instead of a flat band.
+  @override
+  Widget build(BuildContext context) => BlushCanvas(
+    child: Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: appBar,
+      bottomNavigationBar: bottomNavigationBar,
+      body: body,
+    ),
+  );
+}
+
+/// Decorative page background: the blush canvas gradient.
+class BotanicalBackdrop extends StatelessWidget {
+  final bool subtle;
+  const BotanicalBackdrop({super.key, this.subtle = false});
+  @override
+  Widget build(BuildContext context) => const IgnorePointer(
+    child: ExcludeSemantics(
+      child: DecoratedBox(
+        decoration: BoxDecoration(gradient: MaakGradients.canvas),
+      ),
+    ),
+  );
+}
+
+class BotanicalHeader extends StatelessWidget {
+  final String title, subtitle;
+  final Widget? progress;
+  final bool back;
+  final double height;
+  const BotanicalHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.progress,
+    this.back = true,
+    this.height = 290,
+  });
+  // A minimum rather than a fixed height: the header grows with its content
+  // (long titles, large text) instead of overflowing.
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      minHeight:
+          height * (MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.8)),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 48,
+                child: back && Navigator.canPop(context)
+                    ? const RoundIconSurface(child: BackButton())
+                    : null,
+              ),
+              const Expanded(child: MaakLogo(iconSize: 29)),
+              const SizedBox(width: 48),
+            ],
+          ),
+          if (progress != null) ...[const SizedBox(height: 16), progress!],
+          const SizedBox(height: 25),
+          Semantics(
+            header: true,
+            child: Text(
+              title,
+              textAlign: progress == null ? TextAlign.center : TextAlign.start,
+              style: MaakText.greeting.copyWith(fontSize: 32, height: 1.1),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            textAlign: progress == null ? TextAlign.center : TextAlign.start,
+            style: MaakText.body.copyWith(color: MaakColors.onHero),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class FormSheet extends StatelessWidget {
+  final Widget child;
+
+  /// Height over which the bottom of the sheet fades out; 0 keeps it solid
+  /// white down to its bottom edge.
+  final double fade;
+
+  /// Defaults to extra bottom room so the last line still sits on white,
+  /// above the fade.
+  final EdgeInsetsGeometry padding;
+  const FormSheet({
+    super.key,
+    required this.child,
+    this.fade = 150,
+    this.padding = const EdgeInsets.fromLTRB(24, 24, 24, 80),
+  });
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _FadingSheetPainter(fade: fade),
+    child: Padding(
+      padding: padding,
+      child: SizedBox(width: double.infinity, child: child),
+    ),
+  );
+}
+
+/// Marks a dense form laid out by a compact [AuthCanvas]: [FieldLabel] and
+/// [PasswordFields] use tighter spacing inside it.
+class CompactForm extends InheritedWidget {
+  const CompactForm({super.key, required super.child});
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<CompactForm>() != null;
+  @override
+  bool updateShouldNotify(CompactForm oldWidget) => false;
+}
+
+/// White sheet with a rounded top and a soft shadow along the top edge whose
+/// bottom fades into the page background, so it never looks cut off.
+class _FadingSheetPainter extends CustomPainter {
+  const _FadingSheetPainter({this.fade = 150});
+  final double fade;
+  static const _radius = Radius.circular(26);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final sheet = RRect.fromRectAndCorners(
+      rect,
+      topLeft: _radius,
+      topRight: _radius,
+    );
+    final solidUntil = size.height <= fade
+        ? 0.0
+        : (size.height - fade) / size.height;
+    Shader fading(Color color) => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      // Eased: slow at first, then gone well before the bottom edge.
+      colors: [
+        color,
+        color,
+        color.withValues(alpha: color.a * .55),
+        color.withValues(alpha: 0),
+      ],
+      stops: [0, solidUntil, solidUntil + (1 - solidUntil) * .45, .97],
+    ).createShader(rect);
+
+    // fade 0: solid colour all the way down.
+    Paint brush(Color color) => fade <= 0
+        ? (Paint()..color = color)
+        : (Paint()..shader = fading(color));
+
+    // Shadow only above the sheet, where it meets the header.
+    canvas
+      ..save()
+      ..clipRect(Rect.fromLTRB(-40, -40, size.width + 40, _radius.y))
+      ..drawRRect(
+        sheet.shift(const Offset(0, -4)),
+        Paint()
+          ..color = const Color(0x14AA6464)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      )
+      ..restore()
+      ..drawRRect(sheet, brush(MaakColors.surface))
+      ..drawRRect(
+        sheet.deflate(0.5),
+        brush(MaakColors.border)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_FadingSheetPainter oldDelegate) =>
+      oldDelegate.fade != fade;
+}
+
+class PrivacyNote extends StatelessWidget {
+  const PrivacyNote({super.key});
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(top: 18),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.verified_user_outlined, size: 19, color: MaakColors.icon),
+        SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            'Your information stays private.',
+            style: MaakText.caption,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class AuthCanvas extends StatelessWidget {
+  final List<Widget> children;
+  final String? title;
+  final bool back, hills;
+  final String heroTitle, heroSubtitle;
+  final Widget? progress;
+  final double heroHeight;
+
+  /// The white sheet sits on the bottom edge of the screen and is only as
+  /// tall as its content; any spare height goes to the header above it,
+  /// never inside the sheet. Scrolls only on screens too short for it.
+  final bool anchored;
+
+  /// Denser fields and spacing (see [CompactForm]), for long forms.
+  final bool compact;
+  const AuthCanvas({
+    super.key,
+    required this.children,
+    this.title,
+    this.back = true,
+    this.hills = true,
+    this.heroTitle = 'A little support.\nA stronger you.',
+    this.heroSubtitle =
+        'Real people. Shared experiences.\nBrighter days ahead.',
+    this.progress,
+    this.heroHeight = 290,
+    this.anchored = false,
+    this.compact = false,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final content = children.where((child) => child is! MaakLogo).toList();
+    while (content.isNotEmpty && content.first is SizedBox) {
+      content.removeAt(0);
+    }
+    return BotanicalScaffold(
+      body: Stack(
+        children: [
+          // The one restrained glow, spanning the full width behind the
+          // centred column so tablets show no hard edge.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: heroHeight * 1.4,
+            child: const ExcludeSemantics(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: AlignmentDirectional.topEnd,
+                    radius: 1.2,
+                    colors: [
+                      MaakColors.orbPink,
+                      MaakColors.orbBlush,
+                      Color(0x00FEF8F8),
+                    ],
+                    stops: [0, .4, 1],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          anchored ? _anchoredBody(context, content) : _body(content),
+        ],
+      ),
+    );
+  }
+
+  Widget _form(BuildContext context, List<Widget> content) {
+    final column = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: content,
+    );
+    if (!compact) return column;
+    final theme = Theme.of(context);
+    return CompactForm(
+      child: Theme(
+        data: theme.copyWith(
+          inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+        ),
+        child: column,
+      ),
+    );
+  }
+
+  Widget _body(List<Widget> content) => SafeArea(
+    child: ResponsiveBody(
+      child: SingleChildScrollView(
+        key: ValueKey(heroTitle),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BotanicalHeader(
+              title: heroTitle,
+              subtitle: heroSubtitle,
+              back: back,
+              progress: progress,
+              height: heroHeight,
+            ),
+            Transform.translate(
+              offset: const Offset(0, -18),
+              child: Builder(
+                builder: (context) =>
+                    FormSheet(child: _form(context, content)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  /// Top bar (back button and logo) at the top, the sheet on the bottom edge,
+  /// and the title block centred in the height left between them.
+  Widget _anchoredBody(BuildContext context, List<Widget> content) {
+    // The sheet runs under the home indicator / navigation bar, so the white
+    // reaches the very bottom of the screen; its content stays above them.
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final align = progress == null ? TextAlign.center : TextAlign.start;
+    return SafeArea(
+      bottom: false,
+      child: ResponsiveBody(
+        child: LayoutBuilder(
+          builder: (context, box) => SingleChildScrollView(
+            key: ValueKey(heroTitle),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: box.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          child: back && Navigator.canPop(context)
+                              ? const RoundIconSurface(child: BackButton())
+                              : null,
+                        ),
+                        const Expanded(child: MaakLogo(iconSize: 24)),
+                        const SizedBox(width: 48),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 10, 24, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (progress != null) ...[
+                          progress!,
+                          const SizedBox(height: 8),
+                        ],
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            heroTitle,
+                            textAlign: align,
+                            style: MaakText.greeting.copyWith(
+                              fontSize: 26,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          heroSubtitle,
+                          textAlign: align,
+                          style: MaakText.body.copyWith(
+                            color: MaakColors.onHero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FormSheet(
+                    fade: 0,
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      compact ? 20 : 24,
+                      24,
+                      20 + bottomInset,
+                    ),
+                    child: _form(context, content),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FieldLabel extends StatelessWidget {
+  final String text;
+  final bool requiredField;
+  const FieldLabel(this.text, {super.key, this.requiredField = false});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: CompactForm.of(context)
+        ? const EdgeInsets.only(bottom: 5, top: 10)
+        : const EdgeInsets.only(bottom: 7, top: 16),
+    child: Text.rich(
+      TextSpan(
+        text: text,
+        children: [
+          if (requiredField)
+            const TextSpan(
+              text: ' *',
+              style: TextStyle(color: AppColors.error),
+            ),
+        ],
+      ),
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: MaakColors.ink,
+      ),
+    ),
+  );
+}
+
+class PrimaryButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+  final IconData? icon;
+  const PrimaryButton(
+    this.label, {
+    super.key,
+    this.onPressed,
+    this.busy = false,
+    this.icon,
+  });
+  @override
+  Widget build(BuildContext context) => ElevatedButton(
+    onPressed: busy ? null : onPressed,
+    child: busy
+        ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: MaakColors.muted,
+            ),
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(child: Text(label, textAlign: TextAlign.center)),
+              if (icon != null) ...[
+                const SizedBox(width: 12),
+                Icon(icon, size: 20),
+              ],
+            ],
+          ),
+  );
+}
+
+class SurfaceCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+  const SurfaceCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+    this.onTap,
+  });
+  @override
+  Widget build(BuildContext context) =>
+      SoftCard(onTap: onTap, padding: padding, child: child);
+}
+
+class LandscapeHills extends StatelessWidget {
+  final bool detailed;
+  const LandscapeHills({super.key, this.detailed = false});
+  @override
+  Widget build(BuildContext context) => const BotanicalBackdrop();
+}
+
+class HeroCard extends StatelessWidget {
+  final String title, subtitle;
+  final String? button;
+  final VoidCallback? onTap;
+  const HeroCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.button,
+    this.onTap,
+  });
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: MaakGradients.orb,
+      borderRadius: BorderRadius.circular(MaakRadius.hero),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: Text(title, style: MaakText.cardTitle.copyWith(fontSize: 24)),
+        ),
+        const SizedBox(height: 12),
+        Text(subtitle, style: MaakText.body.copyWith(color: MaakColors.onHero)),
+        if (button != null) ...[
+          const SizedBox(height: 20),
+          PillButton(button!, onPressed: onTap, icon: Icons.arrow_forward),
+        ],
+      ],
+    ),
+  );
+}
+
+class RoleChip extends StatelessWidget {
+  final String label;
+  final bool error;
+
+  /// Grey style for pending / awaiting states.
+  final bool pending;
+  const RoleChip(
+    this.label, {
+    super.key,
+    this.error = false,
+    this.pending = false,
+  });
+
+  // Role badges get their own tint from the Ma'ak palette so volunteers and
+  // help seekers are easy to tell apart; every other chip keeps the default.
+  static const _volunteer = (
+    background: MaakColors.orbPeach, // #FDDFC5
+    text: Color(0xFF8A4B1F),
+  );
+  static const _helpSeeker = (
+    background: MaakColors.orbPink, // #FFD3E5
+    text: Color(0xFF8E2457),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    // Error and pending are status styles; they take priority over role tints.
+    final role = error || pending
+        ? null
+        : switch (label) {
+            'Volunteer' => _volunteer,
+            'Help seeker' => _helpSeeker,
+            _ => null,
+          };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: error
+            ? const Color(0xFFFDE8E8)
+            : pending
+            ? MaakColors.pending
+            : role?.background ?? MaakColors.selected,
+        borderRadius: BorderRadius.circular(MaakRadius.pill),
+      ),
+      child: Text(
+        label,
+        style: MaakText.caption.copyWith(
+          fontWeight: FontWeight.w600,
+          color: error
+              ? const Color(0xFFB0222A)
+              : role?.text ?? MaakColors.ink,
+        ),
+      ),
+    );
+  }
+}
+
+class SectionTitle extends StatelessWidget {
+  final String text;
+  const SectionTitle(this.text, {super.key});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 22, bottom: 12),
+    child: Semantics(header: true, child: Text(text, style: MaakText.section)),
+  );
+}
+
+class EmptyState extends StatelessWidget {
+  final String title, subtitle;
+  final IconData icon;
+  final VoidCallback? retry;
+  const EmptyState(
+    this.title,
+    this.subtitle, {
+    super.key,
+    this.icon = Icons.inbox_outlined,
+    this.retry,
+  });
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(26),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconBadge(icon, size: 64),
+        const SizedBox(height: 16),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: MaakText.itemTitle.copyWith(fontSize: 17),
+        ),
+        const SizedBox(height: 8),
+        Text(subtitle, textAlign: TextAlign.center, style: MaakText.body),
+        if (retry != null) ...[
+          const SizedBox(height: 18),
+          PillButton('Try again', outlined: true, onPressed: retry),
+        ],
+      ],
+    ),
+  );
+}
+
+class LogoHeader extends StatelessWidget {
+  final Widget? trailing;
+  const LogoHeader({super.key, this.trailing});
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      const MaakLogo(iconSize: 26),
+      const Spacer(),
+      if (trailing != null) trailing!,
+    ],
+  );
+}
+
+/// Local calendar date such as "20 Oct 2026"; empty when missing or invalid.
+String formatDay(String? value) {
+  final parsed = value == null ? null : DateTime.tryParse(value);
+  if (parsed == null) return '';
+  final d = parsed.toLocal();
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${d.day} ${months[d.month - 1]} ${d.year}';
+}
+
+String initials(String name) => name
+    .trim()
+    .split(RegExp(r'\s+'))
+    .where((s) => s.isNotEmpty)
+    .take(2)
+    .map((s) => s[0])
+    .join()
+    .toUpperCase();
+
+class RegistrationProgress extends StatelessWidget {
+  final int step;
+  final VoidCallback? onAccountTap;
+  const RegistrationProgress({
+    super.key,
+    required this.step,
+    this.onAccountTap,
+  });
+
+  Widget _dot(Widget child, bool filled) => CircleAvatar(
+    radius: 11,
+    backgroundColor: filled ? MaakColors.button : MaakColors.selected,
+    child: child,
+  );
+
+  // One line (dot, label, connector, dot, label) to keep the header short.
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      InkWell(
+        onTap: onAccountTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _dot(
+                step == 1
+                    ? const Icon(Icons.check, color: Colors.white, size: 14)
+                    : const Text(
+                        '1',
+                        style: TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                true,
+              ),
+              const SizedBox(width: 6),
+              const Text('Account', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+      Container(
+        width: 40,
+        height: 1.5,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        color: step == 1 ? MaakColors.button : MaakColors.border,
+      ),
+      _dot(
+        Text(
+          '2',
+          style: TextStyle(
+            color: step == 1 ? Colors.white : MaakColors.ink,
+            fontSize: 11,
+          ),
+        ),
+        step == 1,
+      ),
+      const SizedBox(width: 6),
+      const Text('Preferences', style: TextStyle(fontSize: 12)),
+    ],
+  );
+}
