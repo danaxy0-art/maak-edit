@@ -1,4 +1,5 @@
-import '../../lib/backend/validation/other_condition_policy.dart';
+import 'dart:io';
+import 'package:maak_app/backend/validation/other_condition_policy.dart';
 
 void main() {
   var count = 0;
@@ -18,8 +19,9 @@ void main() {
     "Crohn's disease": true,
   };
   for (final entry in cases.entries) {
-    if ((validateOtherCondition(entry.key) == null) != entry.value)
+    if ((validateOtherCondition(entry.key) == null) != entry.value) {
       throw StateError('Unexpected validation: ${entry.key}');
+    }
     count++;
   }
   final options = [
@@ -31,17 +33,21 @@ void main() {
     <String, dynamic>{'name': 'Other', 'is_other': true, 'is_active': true},
     <String, dynamic>{'name': 'Inactive diabetes', 'is_active': false},
   ];
-  if (suggestConditions('سكر', options).single['name'] != 'Diabetes')
+  if (suggestConditions('سكر', options).single['name'] != 'Diabetes') {
     throw StateError('Arabic alias did not suggest canonical condition');
+  }
   count++;
-  if (suggestConditions('diab', options).length != 1)
+  if (suggestConditions('diab', options).length != 1) {
     throw StateError('Inactive condition suggested');
+  }
   count++;
-  if (suggestConditions('', options).isNotEmpty)
+  if (suggestConditions('', options).isNotEmpty) {
     throw StateError('Empty query should not suggest');
+  }
   count++;
-  if (suggestConditions('Other', options).isNotEmpty)
+  if (suggestConditions('Other', options).isNotEmpty) {
     throw StateError('Other is not a canonical suggestion');
+  }
   count++;
-  print('$count Other validation and suggestion checks passed');
+  stdout.writeln('$count Other validation and suggestion checks passed');
 }

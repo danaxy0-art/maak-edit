@@ -1,5 +1,6 @@
+import 'dart:io';
 import 'dart:typed_data';
-import '../lib/backend/chat/chat_media_policy.dart';
+import 'package:maak_app/backend/chat/chat_media_policy.dart';
 void main() {
  var checks=0;
  void check(bool ok) {if (!ok) throw StateError('check ${checks+1} failed'); checks++;}
@@ -17,5 +18,5 @@ void main() {
  check(h.getUint32(24,Endian.little)==16000);check(h.getUint16(22,Endian.little)==1);
  check(h.getUint16(34,Endian.little)==16);check(h.getUint32(40,Endian.little)==32000);
  check(voiceWav(Uint8List(1920000)).length==1920044);
- print('$checks media validation/WAV checks passed');
+ stdout.writeln('$checks media validation/WAV checks passed');
 }

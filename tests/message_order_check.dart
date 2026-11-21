@@ -1,4 +1,5 @@
-import '../lib/backend/models/message_order.dart';
+import 'dart:io';
+import 'package:maak_app/backend/models/message_order.dart';
 void main() {
  final rows = [
  {'id':'3','body':'bay','created_at':'2026-10-21T10:03:00Z'},
@@ -9,5 +10,5 @@ void main() {
  if(rows.first['body']!='bay') throw StateError('Input mutated');
  final ties = chronologicalMessages([{'id':'b','created_at':'2026-10-21T10:01:00Z'},{'id':'a','created_at':'2026-10-21T13:01:00+03:00'}]);
  if(ties.first['id']!='a') throw StateError('Unstable tie order');
- print('PASS chronological order, immutable input, stable equal timestamps');
+ stdout.writeln('PASS chronological order, immutable input, stable equal timestamps');
 }

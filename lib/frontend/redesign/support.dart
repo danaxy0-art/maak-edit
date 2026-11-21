@@ -1884,7 +1884,7 @@ class _ConversationPageState extends State<ConversationPage>
               ? null
               : () async {
                   await VoiceCallService.instance.start(widget.requestId);
-                  if (mounted &&
+                  if (context.mounted &&
                       VoiceCallService.instance.call == null &&
                       VoiceCallService.instance.error != null) {
                     ScaffoldMessenger.of(context).showSnackBar(

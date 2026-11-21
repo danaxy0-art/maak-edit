@@ -1,9 +1,10 @@
-import '../lib/backend/validation/form_policy.dart';
-import '../lib/backend/validation/password_policy.dart';
+import 'dart:io';
+import 'package:maak_app/backend/validation/form_policy.dart';
+import 'package:maak_app/backend/validation/password_policy.dart';
 
 void expect(bool value, String label) {
   if (!value) throw StateError(label);
-  print('PASS $label');
+  stdout.writeln('PASS $label');
 }
 
 void main() {

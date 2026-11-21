@@ -27,49 +27,64 @@ String friendlyError(Object error) {
     return 'We could not verify your account. Check your details and try again.';
   }
   if (error is PostgrestException) {
-    if (error.message.contains('ai_matching_disabled'))
+    if (error.message.contains('ai_matching_disabled')) {
       return 'Activate AI matching in your profile to find a match.';
-    if (error.message.contains('volunteer_matching_disabled'))
+    }
+    if (error.message.contains('volunteer_matching_disabled')) {
       return 'This volunteer is not available for new matches. Please choose another volunteer.';
-    if (error.message.contains('sender_only'))
+    }
+    if (error.message.contains('sender_only')) {
       return 'You can delete only your own messages for everyone.';
-    if (error.message.contains('message_unavailable'))
+    }
+    if (error.message.contains('message_unavailable')) {
       return 'This message is no longer available. Refresh the conversation.';
+    }
     if (error.code == '23505') {
       return 'This record already exists. For conditions, choose the existing name or link the request to it.';
     }
     if (error.code == '42501') {
       return 'You do not have permission to perform this action.';
     }
-    if (error.message.contains('invalid_other_name'))
+    if (error.message.contains('invalid_other_name')) {
       return 'Enter a condition name of 3–60 characters, without links or numbers only.';
-    if (error.message.contains('condition_already_listed'))
+    }
+    if (error.message.contains('condition_already_listed')) {
       return 'This condition is already listed. Select the existing condition.';
-    if (error.message.contains('request_changed'))
+    }
+    if (error.message.contains('request_changed')) {
       return 'This request has already changed. Refresh the list.';
-    if (error.message.contains('role_not_allowed'))
+    }
+    if (error.message.contains('role_not_allowed')) {
       return 'Your account role does not match this profile. Sign out and log in again.';
+    }
        
              // === ADDED: report errors ===
-    if (error.message.contains('already_reported'))
+    if (error.message.contains('already_reported')) {
       return 'You already reported this message.';
-    if (error.message.contains('cannot_report_own_message'))
+    }
+    if (error.message.contains('cannot_report_own_message')) {
       return 'You cannot report your own message.';
+    }
     // === ADDED (new): reporting a deleted message ===
-    if (error.message.contains('message_deleted'))
+    if (error.message.contains('message_deleted')) {
       return 'This message was deleted, so it can no longer be reported.';
+    }
     // === END ADDED (new) ===
-    if (error.message.contains('invalid_report_reason'))
+    if (error.message.contains('invalid_report_reason')) {
       return 'Choose a reason for your report.';
-    if (error.message.contains('invalid_report_description'))
+    }
+    if (error.message.contains('invalid_report_description')) {
       return 'Keep the description under 500 characters.';
+    }
     // === END ADDED ===
     final moderation = _moderationMessage(error.message);
     if (moderation != null) return moderation;
-    if (error.message.contains('not_allowed'))
+    if (error.message.contains('not_allowed')) {
       return 'Sign in with an account permitted to perform this action.';
-    if (error.message.contains('invalid_conditions'))
+    }
+    if (error.message.contains('invalid_conditions')) {
       return 'Select between 1 and 20 conditions.';
+    }
     if (error.message.contains('condition_inactive')) {
       return 'This condition is no longer available. Choose an active condition.';
     }

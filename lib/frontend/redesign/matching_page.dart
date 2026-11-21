@@ -26,8 +26,9 @@ class _MatchingPageState extends State<MatchingPage> {
     final enabled =
         await SupabaseService.client.rpc('has_maak_ai_consent') == true;
     if (!mounted) return {'activation_required': true};
-    if (!enabled && !await requestAiMatchingActivation(context))
+    if (!enabled && !await requestAiMatchingActivation(context)) {
       return {'activation_required': true};
+    }
     try {
       return await SupabaseService.getMatches(useAi: true);
     } on AiMatchingDisabled {

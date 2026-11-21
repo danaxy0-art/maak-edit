@@ -45,14 +45,17 @@ class ChatMediaService {
         .eq('id', attachment.id)
         .maybeSingle();
     if (existing != null) return;
-    if (attachment.bytes.isEmpty || attachment.bytes.length > chatMediaLimit)
+    if (attachment.bytes.isEmpty || attachment.bytes.length > chatMediaLimit) {
       throw ArgumentError('File must be up to 10 MB.');
+    }
     if (attachment.kind == 'image' &&
-        imageMime(attachment.bytes) != attachment.mime)
+        imageMime(attachment.bytes) != attachment.mime) {
       throw ArgumentError('Invalid image.');
+    }
     if (attachment.kind == 'video' &&
-        videoMime(attachment.bytes) != attachment.mime)
+        videoMime(attachment.bytes) != attachment.mime) {
       throw ArgumentError('Invalid MP4 video.');
+    }
     try {
       await client.storage
           .from(bucket)
@@ -87,8 +90,9 @@ class ChatMediaService {
                 .select('id')
                 .eq('id', attachment.id)
                 .maybeSingle() !=
-            null)
+            null) {
           return;
+        }
       } catch (_) {
         /* Preserve original error. Keep the upload for a safe retry. */
       }

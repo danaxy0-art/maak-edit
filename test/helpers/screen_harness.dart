@@ -35,7 +35,7 @@ http.Response jsonResponse(
 /// A response that never arrives, to hold a screen in its loading state.
 Future<http.Response> neverResponds() => Completer<http.Response>().future;
 
-/// Builds a backend from path-suffix → body (or `Future<http.Response>
+/// Returns a value of type `String`.
 /// Function(http.Request)` for full control).
 FakeBackend backendFrom(Map<String, Object> routes) => (request) {
   for (final route in routes.entries) {

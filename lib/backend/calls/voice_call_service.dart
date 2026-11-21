@@ -68,14 +68,17 @@ class VoiceCallService extends ChangeNotifier {
 
   static String message(Object e) {
     final text = e.toString();
-    if (text.contains('participant_busy'))
+    if (text.contains('participant_busy')) {
       return 'One participant is already in a call.';
-    if (text.contains('conversation_unavailable'))
+    }
+    if (text.contains('conversation_unavailable')) {
       return 'Calls require an accepted, open conversation.';
+    }
     if (text.contains('23505')) return 'You have already reported this call.';
     if (text.toLowerCase().contains('permission') ||
-        text.toLowerCase().contains('notallowed'))
+        text.toLowerCase().contains('notallowed')) {
       return 'Allow microphone access to use voice calls.';
+    }
     return 'Could not complete this action. Check your connection and try again.';
   }
 
@@ -253,8 +256,9 @@ class VoiceCallService extends ChangeNotifier {
       if (_pendingEnd != null) {
         await action('end', id: _pendingEnd);
         _pendingEnd = null;
-        if (error == 'Call ended on this device. Waiting to notify your peer.')
+        if (error == 'Call ended on this device. Waiting to notify your peer.') {
           error = null;
+        }
       }
       final current = await action('sync');
       if (revision != _revision) return;
@@ -319,8 +323,9 @@ class VoiceCallService extends ChangeNotifier {
         }
         if (_pc!.connectionState ==
                 RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
-            status != 'connected')
+            status != 'connected') {
           await action('connected');
+        }
       }
       notifyListeners();
     } catch (e) {

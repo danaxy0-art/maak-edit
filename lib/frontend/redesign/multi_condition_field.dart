@@ -203,8 +203,9 @@ class _MultiConditionFieldState extends State<MultiConditionField> {
                                 ].any(
                                   (n) => n.toString().trim().toLowerCase() == q,
                                 )),
-                          ))
+                          )) {
                             return 'This condition is already listed. Select it from the suggestions.';
+                          }
                           return null;
                         },
                         decoration: const InputDecoration(

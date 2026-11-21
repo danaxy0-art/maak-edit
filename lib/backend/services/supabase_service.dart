@@ -425,8 +425,9 @@ class SupabaseService {
         body: {'use_ai': useAi},
       );
       if (response.data is Map &&
-          response.data['error'] == 'ai_matching_disabled')
+          response.data['error'] == 'ai_matching_disabled') {
         throw AiMatchingDisabled();
+      }
       if (response.status != 200 || response.data is! Map) {
         throw StateError('Matching unavailable');
       }
@@ -435,8 +436,9 @@ class SupabaseService {
       rethrow;
     } on FunctionException catch (error) {
       if (error.details is Map &&
-          error.details['error'] == 'ai_matching_disabled')
+          error.details['error'] == 'ai_matching_disabled') {
         throw AiMatchingDisabled();
+      }
       throw ArgumentError('Could not load matches. Please try again.');
     } catch (_) {
       throw ArgumentError(

@@ -23,12 +23,14 @@ String imageMime(Uint8List bytes) {
   if (bytes.length < 12 || bytes.length > chatMediaLimit) {
     throw ArgumentError('Choose a PNG, JPEG or WebP image up to 10 MB.');
   }
-  if (bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff)
+  if (bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff) {
     return 'image/jpeg';
+  }
   if (bytes.take(8).join(',') == '137,80,78,71,13,10,26,10') return 'image/png';
   if (String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
-      String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP')
+      String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
     return 'image/webp';
+  }
   throw ArgumentError('Choose a PNG, JPEG or WebP image.');
 }
 

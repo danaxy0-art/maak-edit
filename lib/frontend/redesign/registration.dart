@@ -76,8 +76,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (!force &&
         _checkedEmail == email &&
         (_emailError == null ||
-            _emailError!.startsWith('This email is already')))
+            _emailError!.startsWith('This email is already'))) {
       return _emailError == null;
+    }
     final version = ++_emailCheckVersion;
     setState(() {
       _emailChecking = true;
@@ -85,8 +86,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
     String? error;
     try {
-      if (await SupabaseService.registrationEmailExists(email))
+      if (await SupabaseService.registrationEmailExists(email)) {
         error = 'This email is already registered. Please log in.';
+      }
     } catch (e) {
       error = e is FunctionException && e.status == 429
           ? 'Too many checks. Please wait before trying again.'
@@ -94,8 +96,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
     if (!mounted ||
         version != _emailCheckVersion ||
-        email != _normalizedEmail())
+        email != _normalizedEmail()) {
       return false;
+    }
     setState(() {
       _emailChecking = false;
       _checkedEmail = email;

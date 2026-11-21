@@ -46,6 +46,8 @@ class PushNotificationService {
       }
     });
 
+    // NOTE: Migrate to onRegistered after verifying the installed Firebase API.
+    // ignore: deprecated_member_use
     messaging.onTokenRefresh.listen((token) {
       if (SupabaseService.currentUser != null) unawaited(_save(token));
     });
@@ -90,6 +92,8 @@ class PushNotificationService {
         sound: true,
       );
       if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+      // NOTE: Migrate to register() and onRegistered after API verification.
+      // ignore: deprecated_member_use
       final token = await messaging.getToken();
       if (token != null) await _save(token);
     } catch (e) {

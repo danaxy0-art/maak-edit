@@ -308,16 +308,18 @@ class _VoiceCallHistoryPageState extends State<VoiceCallHistoryPage> {
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: future,
       builder: (context, s) {
-        if (s.hasError)
+        if (s.hasError) {
           return Center(
             child: TextButton(
               onPressed: () => setState(() => future = load()),
               child: const Text('Could not load calls. Retry'),
             ),
           );
+        }
         if (!s.hasData) return const Center(child: CircularProgressIndicator());
-        if (s.data!.isEmpty)
+        if (s.data!.isEmpty) {
           return const Center(child: Text('No voice calls yet.'));
+        }
         return ListView(
           children: s.data!
               .map(
@@ -391,13 +393,14 @@ class _AdminVoiceCallIssuesPageState extends State<AdminVoiceCallIssuesPage> {
   Widget _body() => FutureBuilder<List<Map<String, dynamic>>>(
     future: future,
     builder: (context, s) {
-      if (s.hasError)
+      if (s.hasError) {
         return Center(
           child: TextButton(
             onPressed: () => setState(() => future = load()),
             child: const Text('Could not load issues. Retry'),
           ),
         );
+      }
       if (!s.hasData) return const Center(child: CircularProgressIndicator());
       final all = s.data!;
       final rows = all.where((r) => filter == 'all' || r['status'] == filter);

@@ -79,11 +79,12 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
       _setDraft(null);
       return true;
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Not sent. Your attachment is kept. ${friendlyError(error)}',
         );
+      }
       return false;
     } finally {
       _setBusy(false);
@@ -102,16 +103,18 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
   @override
   void didUpdateWidget(covariant ChatMediaComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.enabled && oldWidget.enabled && _recording)
+    if (!widget.enabled && oldWidget.enabled && _recording) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_stop(discard: true));
       });
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed && _recording)
+    if (state != AppLifecycleState.resumed && _recording) {
       unawaited(_stop(discard: true));
+    }
     if (state != AppLifecycleState.resumed) unawaited(_preview.pause());
   }
 
@@ -216,7 +219,7 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
         final file = result.files.single;
         bytes = file.size > chatMediaLimit ? null : file.bytes;
       }
-      if (bytes == null || bytes.length > chatMediaLimit)
+      if (bytes == null || bytes.length > chatMediaLimit) {
         throw ArgumentError(
           camera && video
               ? 'This video is larger than 10 MB. Please record a shorter one.'
@@ -224,14 +227,16 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
               ? 'Choose an MP4 video up to 10 MB.'
               : 'Choose an image up to 10 MB.',
         );
+      }
       final String mime;
       try {
         mime = video ? videoMime(bytes) : imageMime(bytes);
       } on ArgumentError {
-        if (camera && video)
+        if (camera && video) {
           throw ArgumentError(
             'Your camera did not save this video as MP4. Please choose an MP4 video instead.',
           );
+        }
         rethrow;
       }
       // Decode before upload so corrupt images produce a clear error.
@@ -261,10 +266,11 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
     if (_busy || _recording || !widget.enabled) return;
     _setBusy(true);
     try {
-      if (!await _recorder.hasPermission())
+      if (!await _recorder.hasPermission()) {
         throw ArgumentError(
           'Allow microphone access to record a voice message.',
         );
+      }
       if (!mounted || !widget.enabled) return;
       _pcm.clear();
       final stream = await _recorder.startStream(
@@ -292,20 +298,23 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
       _subscription = stream.listen(
         (chunk) {
           final remaining = 32000 * voiceSecondsLimit - _pcm.length;
-          if (remaining > 0)
+          if (remaining > 0) {
             _pcm.add(
               chunk.length <= remaining ? chunk : chunk.sublist(0, remaining),
             );
-          if (_pcm.length >= 32000 * voiceSecondsLimit && !_busy)
+          }
+          if (_pcm.length >= 32000 * voiceSecondsLimit && !_busy) {
             unawaited(_stop());
+          }
         },
         onDone: () {
           if (!(_recordDone?.isCompleted ?? true)) _recordDone!.complete();
         },
         onError: (Object error) {
           unawaited(_stop(discard: true));
-          if (mounted)
+          if (mounted) {
             setState(() => _error = 'Recording failed. Please try again.');
+          }
         },
       );
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -363,11 +372,12 @@ class ChatMediaComposerState extends State<ChatMediaComposer>
       }
       if (mounted) setState(() => _previewPlaying = !_previewPlaying);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               _error = 'Could not play this recording. Please record it again.',
         );
+      }
     }
   }
 
@@ -510,11 +520,12 @@ class _ChatMediaBubbleState extends State<ChatMediaBubble>
     );
     _subscriptions.add(
       _player.onPlayerComplete.listen((_) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _playing = false;
             _position = Duration.zero;
           });
+        }
       }),
     );
   }
@@ -557,11 +568,12 @@ class _ChatMediaBubbleState extends State<ChatMediaBubble>
       }
       if (mounted) setState(() => _playing = !_playing);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _playing = false;
           _error = 'Could not play. Tap to retry.';
         });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -625,7 +637,7 @@ class _ChatMediaBubbleState extends State<ChatMediaBubble>
     return FutureBuilder<String>(
       future: _url,
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return TextButton.icon(
             onPressed: () => setState(
               () => _url = ChatMediaService.signedUrl(
@@ -635,12 +647,14 @@ class _ChatMediaBubbleState extends State<ChatMediaBubble>
             icon: const Icon(Icons.refresh),
             label: const Text('Retry photo'),
           );
-        if (!snapshot.hasData)
+        }
+        if (!snapshot.hasData) {
           return const SizedBox(
             width: 180,
             height: 120,
             child: Center(child: CircularProgressIndicator()),
           );
+        }
         final url = snapshot.data!;
         return InkWell(
           onTap: () => Navigator.push(
@@ -714,11 +728,12 @@ class _ChatVideoPageState extends State<ChatVideoPage>
       setState(() => _loading = false);
     } catch (_) {
       await candidate?.dispose();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = 'Video unavailable, deleted, or unsupported on this device.';
         });
+      }
     }
   }
 
@@ -787,11 +802,12 @@ class _ChatVideoPageState extends State<ChatVideoPage>
                           await _controller!.play();
                         }
                       } catch (_) {
-                        if (mounted)
+                        if (mounted) {
                           setState(
                             () => _error =
                                 'Could not play this video. Please retry.',
                           );
+                        }
                       }
                     },
                   ),
@@ -832,22 +848,25 @@ class _ChatAttachmentPageState extends State<ChatAttachmentPage> {
                     m['id'] == widget.message['id'] && m['deleted_at'] == null,
               ) ??
               false;
-          if (snapshot.hasError || (snapshot.hasData && !available))
+          if (snapshot.hasError || (snapshot.hasData && !available)) {
             return Scaffold(
               appBar: AppBar(title: const Text('Attachment')),
               body: const Center(
                 child: Text('This attachment is no longer available.'),
               ),
             );
-          if (!snapshot.hasData)
+          }
+          if (!snapshot.hasData) {
             return Scaffold(
               appBar: AppBar(title: const Text('Attachment')),
               body: const Center(child: CircularProgressIndicator()),
             );
-          if (widget.message['message_type'] == 'video')
+          }
+          if (widget.message['message_type'] == 'video') {
             return ChatVideoPage(
               path: widget.message['attachment_path'] as String,
             );
+          }
           _url ??= ChatMediaService.signedUrl(
             widget.message['attachment_path'] as String,
           );

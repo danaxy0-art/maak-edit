@@ -7,7 +7,6 @@ import '../../backend/services/supabase_service.dart';
 import '../../backend/validation/form_policy.dart';
 import '../auth/welcome_screen.dart';
 import '../auth/auth_gate.dart';
-import '../design/tokens.dart';
 import '../theme/app_theme.dart';
 import 'ui.dart';
 import 'ai_consent.dart';
@@ -245,62 +244,100 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // Account actions are separated from profile details to reduce clutter.
+  Future<void> _openAccountSettings() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AccountSettingsPage(
+          deletingAccount: _deletingAccount,
+          onDelete: _confirmDeleteAccount,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
-    // Prevent leaving the screen while account deletion is in progress.
     canPop: !_deletingAccount,
     child: BotanicalScaffold(
       appBar: AppBar(
         title: const Text('My profile'),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            tooltip: 'Account settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _deletingAccount ? null : _openAccountSettings,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: ResponsiveBody(
         child: FutureBuilder<Map<String, dynamic>>(
           future: _future,
-          builder: (context, s) {
-            if (s.hasError) {
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
               return EmptyState(
                 'Could not load profile',
-                friendlyError(s.error!),
+                friendlyError(snapshot.error!),
                 retry: () => setState(_load),
               );
             }
-
-            if (!s.hasData) {
+            if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-
-            final p = s.data!;
-            final volunteer = widget.role == 'volunteer';
-
+            final profile = snapshot.data!;
+            final isVolunteer = widget.role == 'volunteer';
+            final conditions =
+                (profile['conditions'] as List?)?.join(', ') ??
+                profile['condition']?.toString() ??
+                'Not provided';
+            final bio = profile[isVolunteer ? 'experience' : 'description'];
             return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 15, 20, 28),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                Center(
-                  child: ProfileAvatarEditor(
-                    name: p['full_name'] as String? ?? '',
-                  ),
+                Row(
+                  children: [
+                    ProfileAvatarEditor(
+                      name: profile['full_name'] as String? ?? '',
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile['full_name'] as String? ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'MaakSerif',
+                              fontSize: 23,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          // A labeled badge communicates the role without
+                          // relying on color alone.
+                          RoleChip(isVolunteer ? 'Volunteer' : 'Help seeker'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _deletingAccount ? null : _edit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 18),
-                Text(
-                  p['full_name'] as String? ?? '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'MaakSerif',
-                    fontSize: 23,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Center(
-                  child: RoleChip(volunteer ? 'Volunteer' : 'Help seeker'),
-                ),
-                const SizedBox(height: 26),
-                if (p['setup_incomplete'] == true)
+                const SizedBox(height: 14),
+                if (profile['setup_incomplete'] == true)
                   const FieldErrorNotice(
                     'Your basic profile is available. The administrator must apply the database updates before you can save condition changes.',
                   ),
-                if (p['profile_complete'] != true) ...[
+                if (profile['profile_complete'] != true) ...[
                   const FieldErrorNotice(
                     'Your profile has not been completed yet.',
                   ),
@@ -320,9 +357,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         }),
                   ),
                 ],
-                for (final review in (p['condition_reviews'] as List? ?? []))
+                for (final review
+                    in (profile['condition_reviews'] as List? ?? []))
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: SurfaceCard(
                       child: Text(
                         'Condition: ${review['submitted_name']}\nStatus: ${review['status']}${review['reason'] == null ? '' : '\nReason: ${review['reason']}'}',
@@ -330,60 +368,82 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                 if (widget.role != 'admin') const AiMatchingSettings(),
-                _row(Icons.mail_outline, 'Email', p['email']),
-                _row(
-                  Icons.favorite_border,
-                  volunteer
-                      ? 'Current condition experience'
-                      : 'Current chronic conditions',
-                  (p['conditions'] as List?)?.join(', ') ?? p['condition'],
-                ),
-                _row(
-                  Icons.language,
-                  'Preferred language',
-                  p['preferred_language'],
-                ),
-                _row(
-                  Icons.description_outlined,
-                  volunteer ? 'My experience' : 'About me',
-                  p[volunteer ? 'experience' : 'description'],
-                ),
-                const SizedBox(height: 10),
-
-                // Existing profile editing action.
-                PrimaryButton(
-                  'Edit profile',
-                  icon: Icons.edit_outlined,
-                  onPressed: _deletingAccount ? null : _edit,
-                ),
-                const SizedBox(height: 14),
-
-                // Existing logout action.
-                TextButton.icon(
-                  onPressed: _deletingAccount ? null : () => logout(context),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Log out'),
-                ),
-
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-
-                // Destructive action is visually separated from
-                // regular profile actions to prevent accidental taps.
-                TextButton.icon(
-                  onPressed: _deletingAccount ? null : _confirmDeleteAccount,
-                  icon: _deletingAccount
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.delete_outline),
-                  label: Text(
-                    _deletingAccount ? 'Deleting account...' : 'Delete account',
+                const SizedBox(height: 12),
+                Text(
+                  'PERSONAL INFORMATION',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w700,
                   ),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                ),
+                const SizedBox(height: 6),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      _infoTile(Icons.mail_outline, 'Email', profile['email']),
+                      const Divider(height: 1),
+                      _infoTile(
+                        Icons.favorite_border,
+                        isVolunteer
+                            ? 'Condition experience'
+                            : 'Chronic conditions',
+                        conditions,
+                      ),
+                      const Divider(height: 1),
+                      _infoTile(
+                        Icons.language,
+                        'Preferred language',
+                        profile['preferred_language'],
+                      ),
+                      const Divider(height: 1),
+                      ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                        leading: const Icon(
+                          Icons.notes_outlined,
+                          color: AppColors.primaryNavy,
+                        ),
+                        title: Text(isVolunteer ? 'My experience' : 'About me'),
+                        subtitle: Text(
+                          bio == null || bio.toString().trim().isEmpty
+                              ? 'Not provided'
+                              : bio.toString(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          16,
+                        ),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: SelectableText(
+                              bio == null || bio.toString().trim().isEmpty
+                                  ? 'Not provided'
+                                  : bio.toString(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.settings_outlined,
+                      color: AppColors.primaryNavy,
+                    ),
+                    title: const Text('Account settings'),
+                    subtitle: const Text('Log out or manage your account'),
+                    trailing: const Icon(Icons.chevron_right),
+                    enabled: !_deletingAccount,
+                    onTap: _openAccountSettings,
+                  ),
                 ),
               ],
             );
@@ -393,35 +453,67 @@ class _ProfilePageState extends State<ProfilePage> {
     ),
   );
 
-  // Display one profile field using the existing app design.
-  Widget _row(IconData icon, String label, dynamic value) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: SurfaceCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _infoTile(IconData icon, String title, dynamic value) => ListTile(
+    dense: true,
+    leading: Icon(icon, color: AppColors.primaryNavy),
+    title: Text(title),
+    subtitle: Text(
+      value == null || value.toString().trim().isEmpty
+          ? 'Not provided'
+          : value.toString(),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    ),
+  );
+}
+
+/// A focused settings screen keeps destructive actions away from daily editing.
+class _AccountSettingsPage extends StatelessWidget {
+  final bool deletingAccount;
+  final Future<void> Function() onDelete;
+
+  const _AccountSettingsPage({
+    required this.deletingAccount,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) => BotanicalScaffold(
+    appBar: AppBar(title: const Text('Account settings')),
+    body: ResponsiveBody(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          Icon(icon, color: AppColors.primaryNavy, size: 22),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value == null || value.toString().isEmpty
-                      ? 'Not provided'
-                      : value.toString(),
-                  style: const TextStyle(fontSize: 14, height: 1.45),
-                ),
-              ],
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: AppColors.primaryNavy),
+              title: const Text('Log out'),
+              subtitle: const Text('Sign out of your account'),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: !deletingAccount,
+              onTap: () => logout(context),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'ACCOUNT MANAGEMENT',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.error),
+              title: const Text(
+                'Delete account',
+                style: TextStyle(color: AppColors.error),
+              ),
+              subtitle: const Text('Permanently remove your account'),
+              trailing: const Icon(Icons.chevron_right, color: AppColors.error),
+              enabled: !deletingAccount,
+              onTap: onDelete,
             ),
           ),
         ],
@@ -464,19 +556,65 @@ Future<void> logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        // Match the account deletion dialog's shape and spacing.
         actionsAlignment: MainAxisAlignment.center,
-        icon: const Icon(Icons.logout, color: AppColors.primaryNavy),
-        title: const Text('Log out?'),
-        content: const Text("Are you sure you want to log out of Ma'ak?"),
-        actions: [
-          TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        title: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: Color(0xFFFFE8E6),
+              child: Icon(
+                Icons.logout_rounded,
+                color: Color(0xFFB42318),
+                size: 30,
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Log out?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'DMSans',
+                fontSize: 23,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 420),
+          child: Text(
+            "Are you sure you want to log out of Ma'ak?",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 14),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Log out'),
+        ),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Log out'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB42318),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
         ],
       ),
@@ -629,6 +767,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
       appBar: AppBar(
         title: Text(widget.reapply ? 'Update and reapply' : 'Edit profile'),
       ),
+      // Keep the save action visible while the form itself scrolls as needed.
+      bottomNavigationBar: !_ready || _error != null
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: PrimaryButton(
+                  widget.reapply ? 'Resubmit application' : 'Save changes',
+                  busy: _busy,
+                  onPressed: _save,
+                ),
+              ),
+            ),
       body: ResponsiveBody(
         child: _error != null
             ? EmptyState(
@@ -638,13 +790,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
               )
             : !_ready
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  FormSheet(
-                    child: Form(
-                      key: _form,
-                      autovalidateMode: AutovalidateMode.disabled,
+            : Form(
+                key: _form,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: [
+                    FormSheet(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -674,9 +825,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             enabled: !_busy,
                             onChanged: (v) => setState(() => _conditions = v),
                           ),
-                          TextButton(
-                            onPressed: () => showAiMatchingDetails(context),
-                            child: const Text('AI matching details'),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => showAiMatchingDetails(context),
+                              icon: const Icon(Icons.info_outline, size: 18),
+                              label: const Text('AI matching details'),
+                            ),
                           ),
                           const FieldLabel(
                             'Preferred language',
@@ -687,17 +842,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             isExpanded: true,
                             items: languages
                                 .map(
-                                  (l) => DropdownMenuItem(
-                                    value: l,
-                                    child: Text(l),
+                                  (language) => DropdownMenuItem(
+                                    value: language,
+                                    child: Text(language),
                                   ),
                                 )
                                 .toList(),
                             onChanged: _busy
                                 ? null
-                                : (v) => setState(() => _language = v),
-                            validator: (v) =>
-                                v == null ? 'Select your language' : null,
+                                : (value) => setState(() => _language = value),
+                            validator: (value) =>
+                                value == null ? 'Select your language' : null,
                           ),
                           FieldLabel(
                             volunteer
@@ -708,12 +863,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           AppTextField(
                             controller: _about,
                             maxLength: 300,
-                            maxLines: 4,
+                            maxLines: 2,
                             enabled: !_busy,
                             liveValidation: volunteer,
                             showValidCheck: volunteer,
-                            validator: (v) =>
-                                volunteer && (v == null || v.trim().isEmpty)
+                            validator: (value) =>
+                                volunteer &&
+                                    (value == null || value.trim().isEmpty)
                                 ? 'Describe your experience'
                                 : null,
                           ),
@@ -728,7 +884,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                       (_document == null || _document!.isEmpty)
                                   ? 'Upload a document'
                                   : null,
-                              builder: (s) => Column(
+                              builder: (field) => Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   OutlinedButton.icon(
@@ -748,25 +904,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                       color: AppColors.textMuted,
                                     ),
                                   ),
-                                  if (s.hasError)
-                                    FieldErrorNotice(s.errorText!),
+                                  if (field.hasError)
+                                    FieldErrorNotice(field.errorText!),
                                 ],
                               ),
                             ),
                           ],
-                          const SizedBox(height: 24),
-                          PrimaryButton(
-                            widget.reapply
-                                ? 'Resubmit application'
-                                : 'Save changes',
-                            busy: _busy,
-                            onPressed: _save,
-                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
       ),
     ),

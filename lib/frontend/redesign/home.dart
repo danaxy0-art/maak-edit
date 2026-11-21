@@ -1,5 +1,6 @@
 import 'profile.dart';
 import 'matching_page.dart';
+import '../patient/health_library_page.dart';
 
 import 'package:flutter/material.dart';
 
@@ -235,11 +236,11 @@ class _HomePageState extends State<HomePage> {
       onTap: () => ShellScope.maybeOf(context)?.selectTab(2),
     ),
     ActionRow(
-      icon: Icons.description_outlined,
-      title: 'Resources',
-      subtitle: 'Helpful information',
+      icon: Icons.menu_book_outlined,
+      title: 'Health Library',
+      subtitle: 'Explore health articles',
       stacked: stacked,
-      onTap: () => _push(const ResourcesPage()),
+      onTap: () => _push(const HealthLibraryPage()),
     ),
   ];
 
