@@ -1,3 +1,4 @@
+import 'sessions.dart'; // ADDED BY RAZAN: session scheduling
 import 'profile.dart';
 import 'matching_page.dart';
 import '../patient/health_library_page.dart';
@@ -235,6 +236,17 @@ class _HomePageState extends State<HomePage> {
       stacked: stacked,
       onTap: () => ShellScope.maybeOf(context)?.selectTab(2),
     ),
+    // === ADDED BY RAZAN: sessions (availability, requests, reschedule, cancel) ===
+    ActionRow(
+      icon: Icons.event_available_outlined,
+      title: 'Sessions',
+      subtitle: volunteer
+          ? 'Your times and session requests'
+          : 'Your scheduled sessions',
+      stacked: stacked,
+      onTap: () => _push(SessionsPage(role: widget.role)),
+    ),
+    // === END ADDED BY RAZAN ===
     ActionRow(
       icon: Icons.menu_book_outlined,
       title: 'Health Library',

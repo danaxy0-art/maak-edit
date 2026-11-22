@@ -1,3 +1,4 @@
+import 'sessions.dart'; // ADDED BY RAZAN: session scheduling
 import 'dart:async';
 import '../calls/voice_calls.dart';
 import '../../backend/calls/voice_call_service.dart';
@@ -410,6 +411,24 @@ class _VolunteerDetailPageState extends State<VolunteerDetailPage> {
         ),
         const SizedBox(height: MaakSpace.md),
       ],
+      // === ADDED BY RAZAN: view this volunteer's available times ===
+      ActionRow(
+        icon: Icons.event_available_outlined,
+        title: 'Available times',
+        subtitle: 'Pick a time to request a support session',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VolunteerSlotsPage(
+              volunteerId: widget.volunteer['user_id'] as String,
+              volunteerName:
+                  widget.volunteer['full_name'] as String? ?? 'the volunteer',
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: MaakSpace.md),
+      // === END ADDED BY RAZAN ===
       _ProfileSection(
         title: 'Support preferences',
         child: Column(

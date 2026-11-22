@@ -79,6 +79,38 @@ String friendlyError(Object error) {
     // === END ADDED ===
     final moderation = _moderationMessage(error.message);
     if (moderation != null) return moderation;
+    // === ADDED BY RAZAN: session scheduling errors ===
+        if (error.message.contains('invalid_slot_time')) {
+      return 'Choose a future time, at most 90 days ahead, lasting 15 minutes to 4 hours.';
+    }
+        if (error.message.contains('slot_overlap')) {
+      return 'You already have a time slot that overlaps this one.';
+    }
+        if (error.message.contains('slot_limit')) {
+      return 'You can keep up to 50 upcoming time slots. Remove one first.';
+    }
+        if (error.message.contains('slot_booked')) {
+      return 'Someone has requested this time. Respond to the session request first.';
+    }
+        if (error.message.contains('slot_unavailable')) {
+      return 'This time is no longer available. Choose another time.';
+    }
+        if (error.message.contains('session_overlap')) {
+      return 'You already have a session at this time.';
+    }
+        if (error.message.contains('too_many_pending')) {
+      return 'You can have up to 3 session requests waiting for an answer.';
+    }
+        if (error.message.contains('session_changed')) {
+      return 'This session has already changed. Refresh the list.';
+    }
+        if (error.message.contains('session_started')) {
+      return 'This session has already started, so it cannot be changed.';
+    }
+        if (error.message.contains('reschedule_limit')) {
+      return 'A session can be rescheduled up to 3 times.';
+    }
+    // === END ADDED BY RAZAN ===
     if (error.message.contains('not_allowed')) {
       return 'Sign in with an account permitted to perform this action.';
     }

@@ -1,0 +1,97 @@
+// ADDED BY RAZAN: checks for supabase/migrations/20261121100000_session_scheduling.sql
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
+const base=fileURLToPath(new URL('../../',import.meta.url));
+const read=f=>readFileSync(base+f,'utf8');
+const db=new PGlite();
+await db.exec(read('tests/database/account_blocking/00_supabase_stub.sql').replace(/^\\.*$/gm,''));
+await db.exec('alter table storage.objects add column metadata jsonb; grant delete on storage.objects to authenticated;');
+await db.exec(read('supabase_schema.sql').replace('create extension if not exists pgcrypto;',''));
+for(const f of ['20261018_matching.sql','20261018_condition_reviews.sql','20261021090000_chat_reads_remove_booking.sql']) await db.exec(read('supabase/migrations/'+f));
+await db.exec('alter table public.support_requests add column restricted_at timestamptz;');
+await db.exec(read('supabase/migrations/20261021_account_blocking.sql'));
+const migration=read('supabase/migrations/20261121100000_session_scheduling.sql');
+await db.exec(migration);await db.exec(migration); // idempotent
+const rollback=read('supabase/rollbacks/20261121100000_session_scheduling_rollback.sql');
+
+const ids={s1:'20000000-0000-0000-0000-000000000001',s2:'20000000-0000-0000-0000-000000000002',v1:'20000000-0000-0000-0000-000000000003',v2:'20000000-0000-0000-0000-000000000004',pend:'20000000-0000-0000-0000-000000000005'};
+for(const [name,id] of Object.entries(ids))await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)',[id,JSON.stringify({full_name:name,role:name[0]==='v'||name==='pend'?'volunteer':'help_seeker'})]);
+await db.query("insert into help_seeker_profiles(user_id,chronic_condition,preferred_language) values($1,'Diabetes','English'),($2,'Diabetes','English')",[ids.s1,ids.s2]);
+for(const v of ['v1','v2'])await db.query("insert into volunteer_profiles(user_id,condition_experience,preferred_language,experience_description,status) values($1,'Diabetes','English','Experience','approved')",[ids[v]]);
+await db.query("insert into volunteer_profiles(user_id,condition_experience,preferred_language,experience_description,status) values($1,'Diabetes','English','Experience','pending_review')",[ids.pend]);
+async function as(name){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[name]??'']);if(name)await db.exec('set role authenticated');}
+const slotAt=(h,len=60)=>[new Date(Date.now()+h*3600e3).toISOString(),new Date(Date.now()+(h+len/60)*3600e3).toISOString()];
+const addSlot=async(who,h,len)=>{await as(who);return (await db.query('select add_maak_time_slot($1,$2) id',slotAt(h,len))).rows[0].id;};
+const rejects=async(f,msg)=>assert.rejects(f,e=>new RegExp(msg).test(e.message),`expected ${msg}`);
+const bookingStatus=async id=>{await as('');return (await db.query('select status from session_bookings where id=$1',[id])).rows[0]?.status;};
+const notes=async(who)=>{await as('');return (await db.query("select title from notifications where user_id=$1 and kind='session' order by created_at",[ids[who]])).rows.map(r=>r.title);};
+let n=0;async function check(label,f){await f();n++;console.log('PASS',label);}
+
+// --- Volunteer sets and manages time slots
+let slotA,slotB,slotC,v2at24;
+await check('SLOT-01 approved volunteer can add a slot',async()=>{slotA=await addSlot('v1',24);assert.ok(slotA);});
+await check('SLOT-02 pending volunteer cannot add slots',async()=>{await as('pend');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(30)),'not_allowed');});
+await check('SLOT-03 help seeker cannot add slots',async()=>{await as('s1');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(30)),'not_allowed');});
+await check('SLOT-04 slot in the past is rejected',async()=>{await as('v1');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(-5)),'invalid_slot_time');});
+await check('SLOT-05 too short (<15 min) and too long (>4 h) are rejected',async()=>{await as('v1');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(40,10)),'invalid_slot_time');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(40,300)),'invalid_slot_time');});
+await check('SLOT-06 more than 90 days ahead is rejected',async()=>{await as('v1');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(24*100)),'invalid_slot_time');});
+await check('SLOT-07 overlapping slot of the same volunteer is rejected',async()=>{await as('v1');await rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(24.5)),'slot_overlap');});
+await check('SLOT-08 another volunteer may use the same time',async()=>{v2at24=await addSlot('v2',24);assert.ok(v2at24);});
+await check('SLOT-09 volunteer sees only own slots',async()=>{slotB=await addSlot('v1',48);slotC=await addSlot('v1',72);await as('v1');const rows=(await db.query('select my_maak_time_slots() r')).rows;assert.equal(rows.length,3);await as('v2');assert.equal((await db.query('select my_maak_time_slots() r')).rows.length,1);});
+await check('SLOT-10 volunteer can remove an unbooked slot; others cannot',async()=>{await as('v2');await rejects(()=>db.query('select remove_maak_time_slot($1)',[slotC]),'slot_unavailable');await as('v1');await db.query('select remove_maak_time_slot($1)',[slotC]);await as('');assert.equal((await db.query('select count(*) n from volunteer_time_slots where id=$1',[slotC])).rows[0].n,0);});
+await check('SLOT-11 members cannot write the tables directly',async()=>{await as('v1');await assert.rejects(()=>db.query("insert into volunteer_time_slots(volunteer_id,starts_at,ends_at) values($1,now()+interval '5 day',now()+interval '5 day 1 hour')",[ids.v1]));await assert.rejects(()=>db.query("update volunteer_time_slots set ends_at=ends_at+interval '1 hour'"));});
+
+// --- Help Seeker views available slots
+await check('VIEW-01 help seeker sees open slots of an approved volunteer',async()=>{await as('s1');const rows=(await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.map(r=>r.r);assert.equal(rows.length,2);assert.ok(rows[0].starts_at<rows[1].starts_at);});
+await check('VIEW-02 pending volunteer shows no slots',async()=>{await as('s1');assert.equal((await db.query('select volunteer_available_slots($1) r',[ids.pend])).rows.length,0);});
+await check('VIEW-03 signed-out caller sees nothing',async()=>{await as('');assert.equal((await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.length,0);});
+
+// --- Help Seeker requests a session
+let b1;
+await check('REQ-01 help seeker requests a slot and the volunteer is notified',async()=>{await as('s1');b1=(await db.query('select request_maak_session($1) id',[slotA])).rows[0].id;assert.equal(await bookingStatus(b1),'pending');assert.deepEqual(await notes('v1'),['New session request']);});
+await check('REQ-02 a requested slot disappears from the open list',async()=>{await as('s2');const rows=(await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows;assert.equal(rows.length,1);});
+await check('REQ-03 second seeker cannot take a held slot',async()=>{await as('s2');await rejects(()=>db.query('select request_maak_session($1)',[slotA]),'slot_unavailable');});
+await check('REQ-04 volunteer cannot request a session',async()=>{await as('v2');await rejects(()=>db.query('select request_maak_session($1)',[slotB]),'not_allowed');});
+await check('REQ-05 seeker cannot hold two overlapping times',async()=>{await as('s1');await rejects(()=>db.query('select request_maak_session($1)',[v2at24]),'session_overlap');});
+await check('REQ-06 at most 3 pending requests per seeker',async()=>{const extra=[];for(const h of [100,110,120,130])extra.push(await addSlot('v2',h));await as('s2');for(const id of extra.slice(0,3))await db.query('select request_maak_session($1)',[id]);await rejects(()=>db.query('select request_maak_session($1)',[extra[3]]),'too_many_pending');});
+
+// --- Volunteer accepts or rejects
+await check('DEC-01 another volunteer cannot decide the request',async()=>{await as('v2');await rejects(()=>db.query('select decide_maak_session($1,true)',[b1]),'session_changed');});
+await check('DEC-02 volunteer accepts and the seeker is notified',async()=>{await as('v1');await db.query('select decide_maak_session($1,true)',[b1]);assert.equal(await bookingStatus(b1),'accepted');assert.ok((await notes('s1')).includes('Session confirmed'));});
+await check('DEC-03 a decided request cannot be decided again',async()=>{await as('v1');await rejects(()=>db.query('select decide_maak_session($1,false)',[b1]),'session_changed');});
+let b2;
+await check('DEC-04 rejecting turns this seeker down but the slot opens again for others',async()=>{await as('s1');b2=(await db.query('select request_maak_session($1) id',[slotB])).rows[0].id;await as('v1');await db.query('select decide_maak_session($1,false)',[b2]);assert.equal(await bookingStatus(b2),'rejected');await as('s2');const open=(await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.map(r=>r.r.id);assert.ok(open.includes(slotB));assert.ok((await notes('s1')).includes('Session request declined'));});
+await check('DEC-05 the rejected seeker no longer sees that slot and cannot request it again',async()=>{await as('s1');const open=(await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.map(r=>r.r.id);assert.ok(!open.includes(slotB));await rejects(()=>db.query('select request_maak_session($1)',[slotB]),'slot_unavailable');});
+await check('DEC-06 another seeker can still request the slot a different seeker was rejected for',async()=>{await as('s2');const mine=(await db.query("select id from session_bookings where seeker_id=$1 and status='pending' limit 1",[ids.s2])).rows[0].id;await db.query('select cancel_maak_session($1)',[mine]);const nb=(await db.query('select request_maak_session($1) id',[slotB])).rows[0].id;assert.equal(await bookingStatus(nb),'pending');await as('s2');await db.query('select cancel_maak_session($1)',[nb]);});
+
+// --- Cancel
+await check('CAN-01 seeker cancels and the slot is open again',async()=>{await as('s1');await db.query('select cancel_maak_session($1)',[b1]);assert.equal(await bookingStatus(b1),'canceled');await as('s2');assert.equal((await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.length,2);assert.ok((await notes('v1')).includes('Session canceled'));});
+await check('CAN-02 a canceled session cannot be canceled again',async()=>{await as('s1');await rejects(()=>db.query('select cancel_maak_session($1)',[b1]),'session_changed');});
+await check('CAN-03 volunteer cancels: slot withdrawn, seeker notified',async()=>{await as('s1');const nb=(await db.query('select request_maak_session($1) id',[slotA])).rows[0].id;await as('v1');await db.query('select decide_maak_session($1,true)',[nb]);await db.query('select cancel_maak_session($1)',[nb]);assert.equal(await bookingStatus(nb),'canceled');await as('s2');assert.equal((await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.length,1);assert.ok((await notes('s1')).filter(t=>t==='Session canceled').length>=1);});
+await check('CAN-04 an unrelated account cannot cancel',async()=>{await as('v1');const sl=await addSlot('v1',200);await as('s1');const nb=(await db.query('select request_maak_session($1) id',[sl])).rows[0].id;await as('s2');await rejects(()=>db.query('select cancel_maak_session($1)',[nb]),'session_changed');await as('s1');await db.query('select cancel_maak_session($1)',[nb]);});
+await check('CAN-05 a slot with a live booking cannot be removed',async()=>{const sl=await addSlot('v1',210);await as('s1');const nb=(await db.query('select request_maak_session($1) id',[sl])).rows[0].id;await as('v1');await rejects(()=>db.query('select remove_maak_time_slot($1)',[sl]),'slot_booked');await as('s1');await db.query('select cancel_maak_session($1)',[nb]);await as('v1');await db.query('select remove_maak_time_slot($1)',[sl]);});
+await check('CAN-06 a session that already started cannot be canceled',async()=>{await as('');const sl=(await db.query("insert into volunteer_time_slots(volunteer_id,starts_at,ends_at) values($1,now()-interval '10 minutes',now()+interval '50 minutes') returning id",[ids.v2])).rows[0].id;const nb=(await db.query("insert into session_bookings(slot_id,seeker_id,volunteer_id,status) values($1,$2,$3,'accepted') returning id",[sl,ids.s1,ids.v2])).rows[0].id;await as('s1');await rejects(()=>db.query('select cancel_maak_session($1)',[nb]),'session_started');});
+
+// --- Reschedule
+let rb,r1,r2,r3;
+await check('RES-01 seeker reschedules: back to pending, volunteer notified, old slot free',async()=>{r1=await addSlot('v2',300);r2=await addSlot('v2',310);r3=await addSlot('v2',320);await as('s1');rb=(await db.query('select request_maak_session($1) id',[r1])).rows[0].id;await as('v2');await db.query('select decide_maak_session($1,true)',[rb]);await as('s1');await db.query('select reschedule_maak_session($1,$2)',[rb,r2]);assert.equal(await bookingStatus(rb),'pending');await as('s2');const open=(await db.query('select volunteer_available_slots($1) r',[ids.v2])).rows.map(r=>r.r.id);assert.ok(open.includes(r1));assert.ok(!open.includes(r2));assert.ok((await notes('v2')).includes('Session rescheduled: please confirm'));});
+await check('RES-02 cannot move to a slot of a different volunteer',async()=>{await as('s1');await rejects(()=>db.query('select reschedule_maak_session($1,$2)',[rb,slotA]),'slot_unavailable');});
+await check('RES-03 cannot move to the same slot or a held slot',async()=>{await as('s1');await rejects(()=>db.query('select reschedule_maak_session($1,$2)',[rb,r2]),'slot_unavailable');});
+await check('RES-04 volunteer reschedules an accepted session: stays accepted, old slot withdrawn, seeker told',async()=>{await as('v2');await db.query('select decide_maak_session($1,true)',[rb]);await db.query('select reschedule_maak_session($1,$2)',[rb,r3]);assert.equal(await bookingStatus(rb),'accepted');await as('s2');const open=(await db.query('select volunteer_available_slots($1) r',[ids.v2])).rows.map(r=>r.r.id);assert.ok(!open.includes(r2));assert.ok((await notes('s1')).includes('Session rescheduled'));});
+await check('RES-05 reschedule limit is 3',async()=>{const more=[];for(const h of [330,340,350])more.push(await addSlot('v2',h));await as('s1');await db.query('select reschedule_maak_session($1,$2)',[rb,more[0]]);await rejects(()=>db.query('select reschedule_maak_session($1,$2)',[rb,more[1]]),'reschedule_limit');});
+await check('RES-06 an unrelated account cannot reschedule',async()=>{const x=await addSlot('v2',360);await as('s2');await rejects(()=>db.query('select reschedule_maak_session($1,$2)',[rb,x]),'session_changed');});
+
+// --- The day of the session
+await check('DAY-01 a confirmed session inside its time shows as in_progress; after it, completed',async()=>{await as('');const sl=(await db.query("insert into volunteer_time_slots(volunteer_id,starts_at,ends_at) values($1,now()-interval '10 minutes',now()+interval '50 minutes') returning id",[ids.v1])).rows[0].id;const nb=(await db.query("insert into session_bookings(slot_id,seeker_id,volunteer_id,status) values($1,$2,$3,'accepted') returning id",[sl,ids.s2,ids.v1])).rows[0].id;const status=async who=>{await as(who);return (await db.query('select my_maak_sessions() r')).rows.map(r=>r.r).find(r=>r.id===nb).display_status;};assert.equal(await status('s2'),'in_progress');assert.equal(await status('v1'),'in_progress');await as('');await db.query("update volunteer_time_slots set starts_at=now()-interval '2 hours',ends_at=now()-interval '1 hour' where id=$1",[sl]);assert.equal(await status('s2'),'completed');assert.equal(await status('v1'),'completed');});
+await check('DAY-02 a pending request whose time passed shows as expired and can no longer be answered',async()=>{await as('');const sl=(await db.query("insert into volunteer_time_slots(volunteer_id,starts_at,ends_at) values($1,now()-interval '30 minutes',now()+interval '30 minutes') returning id",[ids.v1])).rows[0].id;const nb=(await db.query("insert into session_bookings(slot_id,seeker_id,volunteer_id,status) values($1,$2,$3,'pending') returning id",[sl,ids.s2,ids.v1])).rows[0].id;await as('s2');const row=(await db.query('select my_maak_sessions() r')).rows.map(r=>r.r).find(r=>r.id===nb);assert.equal(row.display_status,'expired');await as('v1');await rejects(()=>db.query('select decide_maak_session($1,true)',[nb]),'session_changed');});
+await check('DAY-03 once started, neither side can cancel or reschedule',async()=>{await as('');const slots=(await db.query("select b.id bid,b.seeker_id from session_bookings b join volunteer_time_slots s on s.id=b.slot_id where s.starts_at<=now() and b.status in ('pending','accepted') and b.volunteer_id=$1",[ids.v1])).rows;assert.ok(slots.length>=1);const open=await addSlot('v1',500);for(const r of slots){const who=r.seeker_id===ids.s1?'s1':'s2';await as(who);await rejects(()=>db.query('select cancel_maak_session($1)',[r.bid]),'session_started|session_changed');await rejects(()=>db.query('select reschedule_maak_session($1,$2)',[r.bid,open]),'session_started|session_changed');}});
+
+// --- Lists, blocking, idempotency, rollback
+await check('LIST-01 both sides see the session with the other person\'s name',async()=>{await as('s1');const mine=(await db.query('select my_maak_sessions() r')).rows.map(r=>r.r);assert.ok(mine.length>=1);assert.ok(mine.every(r=>r.is_volunteer===false));assert.ok(mine.some(r=>r.contact_name==='v2'));await as('v2');const theirs=(await db.query('select my_maak_sessions() r')).rows.map(r=>r.r);assert.ok(theirs.every(r=>r.is_volunteer===true));assert.ok(theirs.some(r=>r.contact_name==='s1'));});
+await check('LIST-02 an unrelated account sees none of them',async()=>{await as('pend');assert.equal((await db.query('select my_maak_sessions() r')).rows.length,0);});
+await check('LIST-03 signed-out caller cannot call the functions',async()=>{await as('');await db.exec('set role anon');await assert.rejects(()=>db.query('select my_maak_sessions()'));await assert.rejects(()=>db.query('select request_maak_session($1)',[slotA]));await db.exec('reset role');});
+await check('BLK-01 a blocked volunteer\'s slots are not offered, cannot be requested, and they cannot add slots',async()=>{await as('');const open=await addSlot('v1',400);await as('');await db.query("insert into account_blocks(user_id,blocked_by,reason) values($1,$2,'test')",[ids.v1,ids.v2]);assert.equal((await db.query('select is_maak_account_blocked($1) b',[ids.v1])).rows[0].b,true);await as('s1');assert.equal((await db.query('select volunteer_available_slots($1) r',[ids.v1])).rows.length,0);await rejects(()=>db.query('select request_maak_session($1)',[open]),'slot_unavailable');await as('v1');await assert.rejects(()=>db.query('select add_maak_time_slot($1,$2)',slotAt(410)));});
+await check('SQL-01 migration is idempotent and the rollback removes only its own objects',async()=>{await as('');await db.exec(rollback);const left=(await db.query("select count(*) n from pg_proc where proname in ('add_maak_time_slot','request_maak_session','my_maak_sessions')")).rows[0].n;assert.equal(Number(left),0);assert.equal((await db.query("select to_regclass('public.support_requests') r")).rows[0].r!==null,true);await db.exec(migration);});
+console.log(`${n} session scheduling checks passed`);await db.close();

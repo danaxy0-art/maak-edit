@@ -1319,4 +1319,72 @@ class SupabaseService {
       reapply: true,
     );
   }
+
+  // === ADDED BY RAZAN: session scheduling =====================================
+  // Backed by supabase/migrations/20261121100000_session_scheduling.sql.
+  // Screens: lib/frontend/redesign/sessions.dart.
+
+  /// Volunteer: add an available time slot.
+  static Future<void> addTimeSlot(DateTime start, DateTime end) async =>
+      await client.rpc(
+        'add_maak_time_slot',
+        params: {
+          'p_starts_at': start.toUtc().toIso8601String(),
+          'p_ends_at': end.toUtc().toIso8601String(),
+        },
+      );
+
+  /// Volunteer: remove a slot that has no pending or accepted booking.
+  static Future<void> removeTimeSlot(String slotId) async =>
+      await client.rpc('remove_maak_time_slot', params: {'p_slot_id': slotId});
+
+  /// Volunteer: my upcoming slots (with who holds each one, if anyone).
+  static Future<List<Map<String, dynamic>>> getMyTimeSlots() async =>
+      List<Map<String, dynamic>>.from(
+        await client.rpc('my_maak_time_slots') as List,
+      );
+
+  /// Help Seeker: a volunteer's open (not yet requested) future slots.
+  static Future<List<Map<String, dynamic>>> getAvailableSlots(
+    String volunteerId,
+  ) async => List<Map<String, dynamic>>.from(
+    await client.rpc(
+          'volunteer_available_slots',
+          params: {'p_volunteer_id': volunteerId},
+        )
+        as List,
+  );
+
+  /// Help Seeker: request a session at an open slot.
+  static Future<void> requestSession(String slotId) async =>
+      await client.rpc('request_maak_session', params: {'p_slot_id': slotId});
+
+  /// Volunteer: accept or reject a pending session request.
+  static Future<void> decideSession(String bookingId, bool accept) async =>
+      await client.rpc(
+        'decide_maak_session',
+        params: {'p_booking_id': bookingId, 'p_accept': accept},
+      );
+
+  /// Help Seeker or Volunteer: cancel a pending or accepted session.
+  static Future<void> cancelSession(String bookingId) async => await client.rpc(
+    'cancel_maak_session',
+    params: {'p_booking_id': bookingId},
+  );
+
+  /// Help Seeker or Volunteer: move a session to another open slot.
+  static Future<void> rescheduleSession(
+    String bookingId,
+    String newSlotId,
+  ) async => await client.rpc(
+    'reschedule_maak_session',
+    params: {'p_booking_id': bookingId, 'p_new_slot_id': newSlotId},
+  );
+
+  /// Both roles: my sessions, newest first.
+  static Future<List<Map<String, dynamic>>> getMySessions() async =>
+      List<Map<String, dynamic>>.from(
+        await client.rpc('my_maak_sessions') as List,
+      );
+  // === END ADDED BY RAZAN =====================================================
 }
