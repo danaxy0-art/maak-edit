@@ -4,6 +4,7 @@ import '../../backend/services/supabase_service.dart';
 import '../design/components.dart';
 import '../design/tokens.dart';
 import 'feedback.dart';
+import 'ratings.dart';
 import 'support.dart';
 import 'ui.dart';
 import 'ai_consent.dart';
@@ -463,6 +464,10 @@ class _MatchCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(name, style: MaakText.itemTitle),
+                    VolunteerStatsLine(
+                      volunteerId: match['user_id'] as String?,
+                      top: 2,
+                    ),
                     const SizedBox(height: 2),
                     MetaLine(
                       icon: Icons.language,
