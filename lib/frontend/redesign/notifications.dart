@@ -6,6 +6,7 @@ import 'ui.dart';
 import 'feedback.dart';
 import 'support.dart';
 import 'matching_page.dart';
+import '../patient/health_library_page.dart' show ArticleDetailsPage;
 
 class NotificationBell extends StatefulWidget {
   const NotificationBell({super.key});
@@ -87,6 +88,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
           context,
           requestId: n['reference_id'] as String,
           name: 'Conversation',
+        );
+      } else if (n['kind'] == 'article_reply' && n['reference_id'] != null) {
+        // Someone replied to the member's comment: reference_id is the article.
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ArticleDetailsPage(
+              articleId: n['reference_id'] as String,
+              scrollToComments: true,
+            ),
+          ),
         );
       } else if (n['kind'] == 'match') {
         Navigator.push(
@@ -180,6 +192,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ? Icons.lock_open_outlined
                   : n['kind'] == 'report'
                   ? Icons.flag_outlined
+                  : n['kind'] == 'article_reply'
+                  ? Icons.forum_outlined
                   : Icons.notifications_outlined,
               color: AppColors.primaryNavy,
             ),

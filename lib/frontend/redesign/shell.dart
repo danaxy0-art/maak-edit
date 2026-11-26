@@ -11,6 +11,7 @@ import 'home.dart';
 import 'profile.dart';
 import 'support.dart';
 import 'matching_page.dart';
+import '../patient/health_library_page.dart' show ArticleDetailsPage;
 import 'in_app_banner.dart'; // ADDED: pop-up banner for new notifications
 
 class AppShell extends StatefulWidget {
@@ -88,6 +89,16 @@ class _AppShellState extends State<AppShell> {
           builder: (_) => widget.role == 'volunteer'
               ? const RequestsPage()
               : const JourneyPage(),
+        ),
+      );
+    } else if (n['kind'] == 'article_reply' && n['reference_id'] != null) {
+      // A reply to the member's Health Library comment (push, banner or list).
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => ArticleDetailsPage(
+            articleId: n['reference_id'] as String,
+            scrollToComments: true,
+          ),
         ),
       );
     } else if (n['kind'] == 'match' && widget.role == 'help_seeker') {

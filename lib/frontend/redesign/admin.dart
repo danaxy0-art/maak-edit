@@ -18,10 +18,13 @@ import '../widgets/user_photo.dart';
 import '../../backend/services/push_notification_service.dart';
 import 'report_message.dart' show kReportReasons;
 import 'admin_report_media.dart';
+import '../../backend/services/article_admin_service.dart';
+import '../patient/article_comments.dart';
 
 part 'admin_accounts.dart';
 part 'admin_appeals.dart';
 part 'admin_reports.dart';
+part 'admin_articles.dart';
 
 // Admin layouts use a wider content area on tablets while preserving
 // Ma'ak's existing theme, bottom navigation, and phone widths.
@@ -239,7 +242,7 @@ class _AdminOverviewState extends State<AdminOverview> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Manage volunteer applications and chronic conditions.',
+                'Manage volunteer applications, chronic conditions and Health Library articles.',
                 style: TextStyle(color: AppColors.textMuted, height: 1.5),
               ),
               const SizedBox(height: 26),
@@ -317,6 +320,18 @@ class _AdminOverviewState extends State<AdminOverview> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const ReportsAdminPage(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _menu(
+                        'Health Library articles',
+                        'Add, edit or remove articles and moderate comments',
+                        Icons.auto_stories_outlined,
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ArticlesAdminPage(),
                           ),
                         ),
                       ),

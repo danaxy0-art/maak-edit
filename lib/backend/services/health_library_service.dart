@@ -10,11 +10,19 @@ class HealthLibraryService {
   static SupabaseClient get _db => SupabaseService.client;
   static String get _userId => SupabaseService.userId;
 
-  /// Returns the categories used by published Health Library articles.
-  static Future<List<Map<String, dynamic>>> getIllnessTypes() async {
-    final rows = await _db.from('illness_types').select('id,name').order('name');
-    return List<Map<String, dynamic>>.from(rows);
+  /// The health conditions stored in the database (Admin > Conditions), for
+  /// filtering articles. "Other" is not a topic, so it is left out.
+  static Future<List<Map<String, dynamic>>> getConditions() async {
+    final rows = await SupabaseService.getConditions();
+    return rows.where((c) => c['is_other'] != true).toList();
   }
+
+  // Article columns read by the library. `condition` is the article's health
+  // condition from chronic_conditions ({name}), or null for general articles.
+  static const _articleColumns =
+      'id,title,summary,content,condition_id,source_name,source_url,'
+      'image_url,status,published_at,created_at,updated_at,'
+      'condition:chronic_conditions(name)';
 
   /// Loads published articles and their like counts and current-user state.
   /// Search is case-insensitive across article titles and summaries.
@@ -22,7 +30,7 @@ class HealthLibraryService {
   /// [sort] accepts 'newest', 'oldest', or 'popular'.
   static Future<List<Map<String, dynamic>>> getArticles({
     String search = '',
-    String? illnessTypeId,
+    String? conditionId,
     String collection = 'all',
     String sort = 'newest',
   }) async {
@@ -33,13 +41,10 @@ class HealthLibraryService {
       throw ArgumentError.value(sort, 'sort');
     }
 
-    var query = _db.from('articles').select(
-      'id,title,summary,content,illness_type_id,source_name,source_url,'
-      'image_url,status,published_at,created_at,updated_at,'
-      'illness_types(name)',
-    ).eq('status', 'published');
-    if (illnessTypeId != null && illnessTypeId.isNotEmpty) {
-      query = query.eq('illness_type_id', illnessTypeId);
+    var query =
+        _db.from('articles').select(_articleColumns).eq('status', 'published');
+    if (conditionId != null && conditionId.isNotEmpty) {
+      query = query.eq('condition_id', conditionId);
     }
     // Fetch published rows before filtering locally, so user search strings
     // cannot become PostgREST filter syntax.
@@ -65,6 +70,19 @@ class HealthLibraryService {
       counts[countRow['article_id'] as String] =
           (countRow['like_count'] as num).toInt();
     }
+    // Comment counts are optional: an older database without the comments
+    // migration still shows the library.
+    final commentCounts = <String, int>{};
+    try {
+      final rows = List<dynamic>.from(
+        await _db.rpc('health_article_comment_counts'),
+      );
+      for (final item in rows) {
+        final row = Map<String, dynamic>.from(item as Map);
+        commentCounts[row['article_id'] as String] =
+            (row['comment_count'] as num).toInt();
+      }
+    } catch (_) {}
     final liked = <String>{};
     for (final like in likes) {
       final id = like['article_id'] as String;
@@ -83,6 +101,7 @@ class HealthLibraryService {
       result.add({
         ...row,
         'like_count': counts[id] ?? 0,
+        'comment_count': commentCounts[id] ?? 0,
         'is_liked': liked.contains(id),
         'is_saved': saved.contains(id),
       });
@@ -106,10 +125,35 @@ class HealthLibraryService {
 
   /// Returns full content for one published article.
   static Future<Map<String, dynamic>?> getArticle(String articleId) async {
-    return await _db.from('articles').select(
-      'id,title,summary,content,illness_type_id,source_name,source_url,'
-      'image_url,published_at,created_at,illness_types(name)',
-    ).eq('id', articleId).eq('status', 'published').maybeSingle();
+    return await _db
+        .from('articles')
+        .select(_articleColumns)
+        .eq('id', articleId)
+        .eq('status', 'published')
+        .maybeSingle();
+  }
+
+  /// Like and save state of one article for the article page:
+  /// {is_liked, is_saved, like_count}.
+  static Future<Map<String, dynamic>> getArticleState(String articleId) async {
+    final like = await _db
+        .from('article_likes')
+        .select('article_id')
+        .eq('user_id', _userId)
+        .eq('article_id', articleId)
+        .maybeSingle();
+    final save = await _db
+        .from('saved_articles')
+        .select('article_id')
+        .eq('user_id', _userId)
+        .eq('article_id', articleId)
+        .maybeSingle();
+    var count = 0;
+    for (final item in List<dynamic>.from(await _db.rpc('health_article_like_counts'))) {
+      final row = Map<String, dynamic>.from(item as Map);
+      if (row['article_id'] == articleId) count = (row['like_count'] as num).toInt();
+    }
+    return {'is_liked': like != null, 'is_saved': save != null, 'like_count': count};
   }
 
   /// Adds or removes the current user's like. The database primary key
@@ -139,5 +183,56 @@ class HealthLibraryService {
       await _db.from('saved_articles').delete().eq('user_id', _userId).eq('article_id', articleId);
     }
     return saved;
+  }
+
+  // --- Comments (20261126000000_article_management_comments.sql) -----------
+
+  /// Longest comment or reply accepted by the database.
+  static const maxCommentLength = 1000;
+
+  /// All comments of one article, oldest first, with author name and role.
+  /// Each row: id, article_id, user_id, parent_id (top-level comment of the
+  /// thread, null for top-level), reply_to_id, reply_to_name, body,
+  /// created_at, author_name, author_role, is_mine.
+  static Future<List<Map<String, dynamic>>> getComments(String articleId) async {
+    final rows = await _db.rpc(
+      'get_article_comments',
+      params: {'p_article_id': articleId},
+    );
+    return List<dynamic>.from(rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  /// Adds a comment, or a reply to [replyToId]. The author of the comment
+  /// being answered is notified by the database. Returns the new comment id.
+  static Future<String> addComment(
+    String articleId,
+    String body, {
+    String? replyToId,
+  }) async {
+    final text = body.trim();
+    if (text.isEmpty) throw ArgumentError('Write a comment first.');
+    // runes = code points, the same unit as the database's char_length.
+    if (text.runes.length > maxCommentLength) {
+      throw ArgumentError(
+        'Keep your comment under $maxCommentLength characters.',
+      );
+    }
+    final id = await _db.rpc('add_article_comment', params: {
+      'p_article_id': articleId,
+      'p_body': text,
+      'p_reply_to': replyToId,
+    });
+    return id as String;
+  }
+
+  /// Deletes the caller's own comment (admins: any comment). Deleting a
+  /// top-level comment also removes its replies.
+  static Future<void> deleteComment(String commentId) async {
+    await _db.rpc(
+      'delete_article_comment',
+      params: {'p_comment_id': commentId},
+    );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../../backend/services/supabase_service.dart';
 import 'feedback.dart';
 import '../design/tokens.dart';
@@ -68,7 +69,7 @@ class AiConsentField extends StatelessWidget {
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: enabled ? () => toggle(!value) : null,
-                      child: const Text('I agree to AI matching. *'),
+                      child: const _AgreeLabel(),
                     ),
                   ),
                   TextButton.icon(
@@ -108,7 +109,7 @@ class AiConsentField extends StatelessWidget {
                   onChanged(checked ?? false);
                 }
               : null,
-          title: const Text('I agree to AI matching. *'),
+          title: const _AgreeLabel(),
         ),
         Padding(
           padding: const EdgeInsets.only(left: 12, bottom: 12),
@@ -350,6 +351,21 @@ class _AiMatchingSettingsState extends State<AiMatchingSettings> {
           ),
         ],
       ),
+    ),
+  );
+}
+
+/// "I agree to AI matching." with the red required star used by FieldLabel.
+class _AgreeLabel extends StatelessWidget {
+  const _AgreeLabel();
+
+  @override
+  Widget build(BuildContext context) => const Text.rich(
+    TextSpan(
+      text: 'I agree to AI matching.',
+      children: [
+        TextSpan(text: ' *', style: TextStyle(color: AppColors.error)),
+      ],
     ),
   );
 }

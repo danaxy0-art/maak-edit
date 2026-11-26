@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../backend/calls/voice_call_service.dart';
 import '../../backend/services/supabase_service.dart';
+import '../design/components.dart' show SoftCard, IconBadge;
+import '../design/tokens.dart';
 
 const voiceIssueCategories = [
   'No audio',
@@ -421,22 +423,14 @@ class _AdminVoiceCallIssuesPageState extends State<AdminVoiceCallIssuesPage> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
           const Text(
             'Recurring problems in loaded reports',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-          Wrap(
-            spacing: 8,
-            children: voiceIssueCategories
-                .map(
-                  (c) => Chip(
-                    label: Text(
-                      '$c: ${all.where((r) => r["category"] == c).length}',
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
+          const SizedBox(height: 12),
+          _ProblemStats(reports: all),
+          const SizedBox(height: 16),
           DropdownButton<String>(
             value: filter,
             items: [
@@ -568,5 +562,86 @@ class _ReviewVoiceDialogState extends State<_ReviewVoiceDialog> {
         child: const Text('Save review'),
       ),
     ],
+  );
+}
+
+/// One equal-size compact tile per problem category, in a fixed grid
+/// (3 columns on phones, all 5 in a row from 560 px wide).
+class _ProblemStats extends StatelessWidget {
+  final List<Map<String, dynamic>> reports;
+  const _ProblemStats({required this.reports});
+
+  static const _icons = {
+    'No audio': Icons.volume_off_outlined,
+    'Poor audio': Icons.graphic_eq,
+    'Disconnected': Icons.call_end_outlined,
+    'Could not connect': Icons.signal_cellular_connected_no_internet_4_bar,
+    'Other': Icons.help_outline,
+  };
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const gap = 8.0;
+      final width = constraints.maxWidth;
+      final columns = width >= 560 ? 5 : 3;
+      final tileWidth = (width - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final category in voiceIssueCategories)
+            SizedBox(
+              width: tileWidth,
+              height: 84,
+              child: _tile(
+                category,
+                reports.where((r) => r['category'] == category).length,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+
+  Widget _tile(String label, int count) => Semantics(
+    label: '$label: $count reports',
+    excludeSemantics: true,
+    child: SoftCard(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(
+            _icons[label] ?? Icons.report_problem_outlined,
+            size: 24,
+            color: count > 0 ? MaakColors.blush : MaakColors.fill,
+          ),
+          const Spacer(),
+          // One line in every tile: a long label shrinks rather than wraps.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(fontSize: 11, color: MaakColors.muted),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontFamily: 'DMSans',
+              fontSize: 18,
+              height: 1.1,
+              fontWeight: FontWeight.w700,
+              color: MaakColors.ink,
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }

@@ -111,6 +111,9 @@ String friendlyError(Object error) {
       return 'A session can be rescheduled up to 3 times.';
     }
     // === END ADDED BY RAZAN ===
+    // === Health Library articles and comments (20261126000000) ===
+    final article = _articleMessage(error.message);
+    if (article != null) return article;
     if (error.message.contains('not_allowed')) {
       return 'Sign in with an account permitted to perform this action.';
     }
@@ -204,6 +207,39 @@ const _moderationMessages = {
   'appeal_attempt_invalid':
       'Your appeal status has changed. Tap Check again and try once more.',
 };
+
+// Error codes raised by 20261126000000_article_management_comments.sql.
+// Checked before the generic 'not_allowed' message.
+const _articleMessages = {
+  'comment_not_allowed':
+      'Only help seekers and approved volunteers can comment on articles.',
+  'comment_rate_limited':
+      'You are commenting very quickly. Please wait a minute and try again.',
+  'invalid_comment': 'Write a comment of 1 to 1000 characters.',
+  'comment_unavailable':
+      'This comment is no longer available. Refresh the comments.',
+  'article_unavailable':
+      'This article is no longer available. Refresh the list.',
+  'invalid_article_title': 'Enter a title of 3 to 200 characters.',
+  'invalid_article_summary': 'Enter a summary of 10 to 500 characters.',
+  'invalid_article_content': 'Enter article content of 20 to 20,000 characters.',
+  'invalid_article_source': 'Keep the source name under 120 characters.',
+  'invalid_article_url':
+      'Enter a valid source link that starts with https:// or http://.',
+  'invalid_article_image': 'Enter a valid image link that starts with https://.',
+  'invalid_article_status': 'Choose Draft or Published.',
+  'article_source_required':
+      'Add a source name and link before publishing this article.',
+  'invalid_article_condition':
+      'This health condition is no longer available. Choose another one.',
+};
+
+String? _articleMessage(String message) {
+  for (final entry in _articleMessages.entries) {
+    if (message.contains(entry.key)) return entry.value;
+  }
+  return null;
+}
 
 String? _moderationMessage(String message) {
   for (final entry in _moderationMessages.entries) {

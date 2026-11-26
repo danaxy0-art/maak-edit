@@ -219,7 +219,8 @@ class _HomePageState extends State<HomePage> {
         title: 'Requests',
         subtitle: 'View and respond',
         stacked: stacked,
-        onTap: () => _push(const RequestsPage()),
+        // Same as Messages: switch to the Requests tab, not a page on top.
+        onTap: () => ShellScope.maybeOf(context)?.selectTab(1),
       )
     else
       ActionRow(
@@ -295,7 +296,7 @@ class _HomePageState extends State<HomePage> {
             icon: Icons.arrow_forward,
             outlined: true,
             expand: true,
-            onPressed: () => _push(const RequestsPage()),
+            onPressed: () => ShellScope.maybeOf(context)?.selectTab(1),
           ),
         ],
       );
