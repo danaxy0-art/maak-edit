@@ -66,12 +66,18 @@ class _ProfilePageState extends State<ProfilePage> {
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             actionsAlignment: MainAxisAlignment.center,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+            actionsOverflowButtonSpacing: 8,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
             titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
             contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
 
             // Highlight the destructive nature of the action.
             title: const Column(
@@ -178,28 +184,24 @@ class _ProfilePageState extends State<ProfilePage> {
 
             // Provide a safe exit and disable deletion until acknowledged.
             actions: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FilledButton.icon(
-                    onPressed: acknowledged
-                        ? () => Navigator.pop(dialogContext, true)
-                        : null,
-                    icon: const Icon(Icons.delete_forever_outlined),
-                    label: const Text('Delete account permanently'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFB42318),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFFE6B9B5),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Keep account'),
+              ),
+              FilledButton(
+                onPressed: acknowledged
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB42318),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFE6B9B5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('Keep my account'),
-                  ),
-                ],
+                ),
+                child: const Text('Delete account'),
               ),
             ],
           ),
