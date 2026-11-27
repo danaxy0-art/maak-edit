@@ -1116,6 +1116,9 @@ class _ConversationPageState extends State<ConversationPage>
       context: context,
       builder: (dialogContext) => AlertDialog(
         actionsAlignment: MainAxisAlignment.center,
+        scrollable: true,
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+        actionsOverflowButtonSpacing: 8,
         backgroundColor: MaakColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Row(
@@ -1160,47 +1163,25 @@ class _ConversationPageState extends State<ConversationPage>
             ),
           ],
         ),
-        // Slightly wider dialog; both buttons always side by side.
+        // Keep actions horizontal when they fit; allow accessible overflow.
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
         actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 14,
-                    ),
-                  ),
-                  child: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Keep chatting', maxLines: 1),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _dangerColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 14,
-                    ),
-                  ),
-                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('End chat', maxLines: 1),
-                  ),
-                ),
-              ),
-            ],
+          OutlinedButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            child: const Text('Keep chatting'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _dangerColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            child: const Text('End chat'),
           ),
         ],
       ),
@@ -1247,6 +1228,11 @@ class _ConversationPageState extends State<ConversationPage>
       context: context,
       builder: (dialogContext) => AlertDialog(
         actionsAlignment: MainAxisAlignment.center,
+        scrollable: true,
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+        actionsOverflowButtonSpacing: 8,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
         title: const Row(
           children: [
             Icon(
@@ -1352,6 +1338,14 @@ class _ConversationPageState extends State<ConversationPage>
         context: context,
         builder: (dialogContext) => AlertDialog(
           actionsAlignment: MainAxisAlignment.center,
+          scrollable: true,
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+          actionsOverflowButtonSpacing: 8,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
           title: const Text('Reopen this conversation?'),
           content: const Text(
             'If you agree, both participants can send messages again.',
@@ -1778,6 +1772,14 @@ class _ConversationPageState extends State<ConversationPage>
         context: context,
         builder: (context) => AlertDialog(
           actionsAlignment: MainAxisAlignment.center,
+          scrollable: true,
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+          actionsOverflowButtonSpacing: 8,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
           icon: const Icon(Icons.delete_outline, color: _dangerColor, size: 32),
           title: Text(everyone ? 'Delete for everyone?' : 'Delete for you?'),
           content: Text(
@@ -1796,7 +1798,7 @@ class _ConversationPageState extends State<ConversationPage>
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.pop(context, true),
-              child: Text(everyone ? 'Delete for everyone' : 'Delete for me'),
+              child: const Text('Delete'),
             ),
           ],
         ),
@@ -2807,6 +2809,10 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         actionsAlignment: MainAxisAlignment.center,
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+        actionsOverflowButtonSpacing: 8,
         backgroundColor: MaakColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: const Text('Cancel this request?', style: MaakText.cardTitle),
@@ -2814,15 +2820,10 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
           'The volunteer will be notified.',
           style: MaakText.body,
         ),
-        actionsPadding: const EdgeInsets.fromLTRB(
-          MaakSpace.xl,
-          0,
-          MaakSpace.xl,
-          MaakSpace.xl,
-        ),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, MaakSpace.xl),
         actions: [
           PillButton(
-            'Keep request',
+            'Keep',
             outlined: true,
             compact: true,
             onPressed: () => Navigator.pop(dialogContext, false),
