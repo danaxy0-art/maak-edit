@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../backend/services/health_library_service.dart';
 import '../design/tokens.dart';
 import '../redesign/feedback.dart';
+import '../redesign/member_profile.dart';
 import '../redesign/ui.dart' show initials;
 import '../widgets/user_photo.dart';
 
@@ -419,20 +420,36 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
         replyToName != null;
     final canReply = _canPost;
     final canDelete = mine || widget.moderator;
+    final authorId = c['user_id'] as String?;
+    // Tapping the photo or the name opens the author's profile.
+    void openProfile() {
+      if (authorId != null) {
+        MemberProfilePage.open(context, userId: authorId, name: name);
+      }
+    }
     return Opacity(
       opacity: deleting ? 0.5 : 1,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          UserPhoto(
-            userId: c['user_id'] as String?,
-            size: 34,
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: MaakColors.blush,
-              child: Text(
-                initials(name),
-                style: const TextStyle(fontSize: 12, color: MaakColors.ink),
+          Semantics(
+            button: true,
+            label: "Open $name's profile",
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: authorId == null ? null : openProfile,
+              customBorder: const CircleBorder(),
+              child: UserPhoto(
+                userId: authorId,
+                size: 34,
+                child: CircleAvatar(
+                  radius: 17,
+                  backgroundColor: MaakColors.blush,
+                  child: Text(
+                    initials(name),
+                    style: const TextStyle(fontSize: 12, color: MaakColors.ink),
+                  ),
+                ),
               ),
             ),
           ),
@@ -446,11 +463,15 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      mine ? '$name (you)' : name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: MaakColors.ink,
+                    InkWell(
+                      onTap: authorId == null ? null : openProfile,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Text(
+                        mine ? '$name (you)' : name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: MaakColors.ink,
+                        ),
                       ),
                     ),
                     if (role != null) _RoleBadge(role),

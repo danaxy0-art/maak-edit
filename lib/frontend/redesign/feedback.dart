@@ -211,6 +211,8 @@ const _moderationMessages = {
 // Error codes raised by 20261126000000_article_management_comments.sql.
 // Checked before the generic 'not_allowed' message.
 const _articleMessages = {
+  // 20261127010000_member_profiles.sql
+  'profile_unavailable': 'This profile is not available.',
   'comment_not_allowed':
       'Only help seekers and approved volunteers can comment on articles.',
   'comment_rate_limited':

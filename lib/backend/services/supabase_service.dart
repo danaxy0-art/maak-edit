@@ -894,7 +894,9 @@ class SupabaseService {
         .order('created_at', ascending: false)
         .map(
           (rows) => rows
-              // Chat messages no longer create notifications; older rows are hidden.
+              // Hidden: chat messages (no longer create notifications) and
+              // 'session' rows from the removed booking feature. Session
+              // scheduling uses 'support_session', which is shown.
               .where((r) => r['kind'] != 'session' && r['kind'] != 'message')
               .toList(),
         );

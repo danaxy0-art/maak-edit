@@ -142,8 +142,8 @@ class PushNotificationService {
       return;
     }
 
-    // Chat, request, match and article-reply taps are opened by AppShell,
-    // which owns those screens.
+    // Chat, request, match, article-reply and support_session taps are opened
+    // by AppShell, which owns those screens.
     pendingOpen.value = {
       'id': message.data['id'],
       'kind': kind,
