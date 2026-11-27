@@ -29,6 +29,19 @@ Widget _progress(Future<BadgeProgress?> Function() load) => Scaffold(
   ),
 );
 
+/// The progress sentence behind the card's info button.
+String? _info(WidgetTester tester) => tester
+    .widget<Tooltip>(find.byKey(const ValueKey('badge_progress_info')))
+    .message;
+
+/// How much of the gradient line into a stage is filled, 0 to 1.
+double? _link(WidgetTester tester, String stage) => tester
+    .widget<FractionallySizedBox>(find.byKey(ValueKey('link_$stage')))
+    .widthFactor;
+
+/// Semantics label of one life-cycle stage.
+Finder _stage(String label) => find.bySemanticsLabel(label);
+
 void main() {
   setUpAll(setUpScreenHarness);
   setUp(VolunteerStatsService.resetCache);
@@ -204,17 +217,36 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Beginner badge'), findsOneWidget);
+      expect(find.byType(BadgeChip), findsNothing, reason: 'stages, no pill');
+      for (final name in ['Worm', 'Larva', 'Ladybug']) {
+        expect(find.text(name), findsOneWidget);
+      }
       expect(
-        find.text(
-          'You have supported 3 help seekers. 2 more to earn the Intermediate badge.',
-        ),
+        _stage('Worm, Beginner badge, your current badge'),
         findsOneWidget,
       );
-      final bar = tester.widget<LinearProgressIndicator>(
-        find.byType(LinearProgressIndicator),
+      expect(
+        _stage('Larva, Intermediate badge, not earned yet'),
+        findsOneWidget,
       );
-      expect(bar.value, closeTo(0.6, 0.001));
+      expect(_stage('Ladybug, Expert badge, not earned yet'), findsOneWidget);
+      const sentence =
+          'You have supported 3 help seekers. 2 more to earn the Intermediate badge.';
+      expect(_info(tester), sentence);
+      expect(find.text(sentence), findsNothing, reason: 'behind the i button');
+      expect(find.text(badgeMeaning), findsNothing);
+      expect(
+        find.textContaining('Each help seeker counts once'),
+        findsNothing,
+        reason: 'long explanation removed',
+      );
+      await tester.tap(find.byKey(const ValueKey('badge_progress_info')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text(sentence), findsOneWidget);
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pump(const Duration(seconds: 1));
+      expect(_link(tester, 'intermediate'), closeTo(0.6, 0.001));
+      expect(_link(tester, 'expert'), 0, reason: 'not the next stage yet');
       expect(
         find.bySemanticsLabel(
           'Progress to the Intermediate badge: 3 of 5 help seekers supported',
@@ -244,11 +276,10 @@ void main() {
       );
       expect(find.byType(BadgeChip), findsNothing);
       expect(
-        find.text(
-          'No badge yet. Support your first help seeker to earn the Beginner badge.',
-        ),
-        findsOneWidget,
+        _info(tester),
+        'No badge yet. Support your first help seeker to earn the Beginner badge.',
       );
+      expect(_stage('Worm, Beginner badge, not earned yet'), findsOneWidget);
     });
 
     testScreen('expert: highest badge, no progress bar', (tester) async {
@@ -259,14 +290,19 @@ void main() {
               const BadgeProgress(supported: 21, badge: BadgeLevel.expert),
         ),
       );
-      expect(find.text('Expert badge'), findsOneWidget);
+      expect(_stage('Worm, Beginner badge, earned'), findsOneWidget);
+      expect(_stage('Larva, Intermediate badge, earned'), findsOneWidget);
       expect(
-        find.text(
-          'You have supported 21 help seekers. This is the highest badge.',
-        ),
+        _stage('Ladybug, Expert badge, your current badge'),
         findsOneWidget,
       );
-      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(
+        _info(tester),
+        'You have supported 21 help seekers. This is the highest badge.',
+      );
+      expect(_link(tester, 'intermediate'), 1);
+      expect(_link(tester, 'expert'), 1);
+      expect(find.bySemanticsLabel(RegExp('^Progress to')), findsNothing);
     });
 
     testScreen('not a volunteer (server returns null): nothing shown', (
@@ -293,7 +329,10 @@ void main() {
       expect(find.textContaining('Could not load your badge.'), findsOneWidget);
       await tester.tap(find.text('Retry'));
       await settle(tester);
-      expect(find.text('Beginner badge'), findsOneWidget);
+      expect(
+        _stage('Worm, Beginner badge, your current badge'),
+        findsOneWidget,
+      );
     });
   });
 
@@ -334,12 +373,13 @@ void main() {
     };
     await pumpScreen(tester, const ProfilePage(role: 'volunteer'));
     expect(find.text('My participation badge'), findsOneWidget);
-    expect(find.text('Intermediate badge'), findsOneWidget);
     expect(
-      find.text(
-        'You have supported 6 help seekers. 9 more to earn the Expert badge.',
-      ),
+      _stage('Larva, Intermediate badge, your current badge'),
       findsOneWidget,
+    );
+    expect(
+      _info(tester),
+      'You have supported 6 help seekers. 9 more to earn the Expert badge.',
     );
   });
 
