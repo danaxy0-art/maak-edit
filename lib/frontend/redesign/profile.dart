@@ -14,6 +14,7 @@ import 'multi_condition_field.dart';
 import 'registration.dart';
 import 'feedback.dart';
 import 'profile_avatar.dart';
+import 'badges.dart'; // Sprint 4: volunteer participation badges
 
 class ProfilePage extends StatefulWidget {
   final String role;
@@ -333,6 +334,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ),
                 const SizedBox(height: 14),
+                // Sprint 4: the volunteer's own badge and progress.
+                if (isVolunteer) const MyBadgeProgressCard(),
                 if (profile['setup_incomplete'] == true)
                   const FieldErrorNotice(
                     'Your basic profile is available. The administrator must apply the database updates before you can save condition changes.',

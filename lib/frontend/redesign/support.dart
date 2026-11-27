@@ -22,6 +22,7 @@ import 'chat_media.dart';
 import '../widgets/user_photo.dart';
 import '../../backend/chat/chat_media_policy.dart' show chatMediaCaption;
 import 'report_message.dart'; // ADDED: report a message
+import 'ratings.dart'; // Sprint 4: volunteer ratings
 
 class DataListPage extends StatefulWidget {
   final String title;
@@ -315,6 +316,10 @@ class _VolunteerCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(name, style: MaakText.itemTitle),
+                VolunteerStatsLine(
+                  volunteerId: volunteer['user_id'] as String?,
+                  top: 2,
+                ),
                 const SizedBox(height: MaakSpace.sm),
                 Wrap(
                   spacing: 6,
@@ -523,6 +528,11 @@ class _VolunteerDetailPageState extends State<VolunteerDetailPage> {
           widget.volunteer['full_name'] as String? ?? 'Volunteer',
           textAlign: TextAlign.center,
           style: MaakText.greeting.copyWith(fontSize: 28),
+        ),
+        VolunteerStatsLine(
+          volunteerId: widget.volunteer['user_id'] as String?,
+          center: true,
+          explainBadge: true,
         ),
         const SizedBox(height: MaakSpace.md),
         Container(
@@ -2040,6 +2050,12 @@ class _ConversationPageState extends State<ConversationPage>
             ),
           // An administrator restriction cannot be reopened by participants.
           if (_ended && !_restricted) _reopenControls(),
+          // Sprint 4: the help seeker rates the volunteer; hidden for others.
+          if (_ended && !_restricted)
+            RateVolunteerCard(
+              requestId: widget.requestId,
+              volunteerName: widget.name,
+            ),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _stream,

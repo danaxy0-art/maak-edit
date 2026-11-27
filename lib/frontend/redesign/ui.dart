@@ -588,8 +588,8 @@ class RoleChip extends StatelessWidget {
     text: Color(0xFF8A4B1F),
   );
   static const _helpSeeker = (
-    background: MaakColors.orbPink, // #FFD3E5
-    text: Color(0xFF8E2457),
+    background: Color(0xFFDCEBFA), // light blue
+    text: Color(0xFF1F4E79), // dark blue, about 7:1 contrast on the background
   );
 
   @override
