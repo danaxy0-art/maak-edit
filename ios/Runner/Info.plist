@@ -28,6 +28,10 @@
 	<string>Take photos and videos to send in your private Ma’ak chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record voice messages to send in your private Ma’ak chat.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Add your confirmed Ma’ak support sessions to your calendar, and update them if a session moves.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Add your confirmed Ma’ak support sessions to your calendar, and update them if a session moves.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
