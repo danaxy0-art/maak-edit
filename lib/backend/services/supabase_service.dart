@@ -14,6 +14,16 @@ class SupabaseService {
   static final chatRevision = ValueNotifier<int>(0);
   static final profileRevision = ValueNotifier<int>(0);
   static SupabaseClient get client => Supabase.instance.client;
+  static Future<Map<String, dynamic>> getAdminAnalytics({
+    int? days,
+  }) async {
+    final result = await client.rpc(
+      'admin_get_analytics_dashboard',
+      params: {'p_days': days},
+    ).timeout(const Duration(seconds: 15));
+
+    return Map<String, dynamic>.from(result as Map);
+  }
   static User? get currentUser => client.auth.currentUser;
   static String get userId =>
       currentUser?.id ?? (throw StateError('Log in first'));
