@@ -6,6 +6,7 @@ import 'backend/services/account_status_watcher.dart';
 import 'backend/services/chat_alert_service.dart';
 import 'backend/services/push_notification_service.dart';
 import 'backend/services/supabase_service.dart';
+import 'backend/services/realtime_presence_service.dart';
 import 'firebase_options.dart';
 import 'frontend/calls/voice_calls.dart';
 import 'frontend/auth/auth_gate.dart';
@@ -29,6 +30,9 @@ Future<void> main() async {
   ChatAlertService.init();
   // Sends a member to the restricted screen as soon as an admin blocks them.
   AccountStatusWatcher.start();
+
+  // Realtime online/offline presence.
+  RealtimePresenceService.instance.initialize();
 }
 
 class MaakApp extends StatelessWidget {

@@ -8,6 +8,8 @@ enum _AccountFilter { all, active, blocked }
 
 enum _AccountType { all, helpSeeker, volunteer }
 
+enum _PresenceFilter { all, online, offline }
+
 /// Outcome of a block/reactivate dialog: the action succeeded, or another
 /// administrator changed the account first and the page must refresh.
 typedef ModerationOutcome = ({bool stale, String? text});
@@ -55,11 +57,15 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
   String _search = '';
   _AccountFilter _filter = _AccountFilter.all;
   _AccountType _type = _AccountType.all;
+  _PresenceFilter _presence = _PresenceFilter.all;
   // Rows stay visible while a refresh runs; only the first load shows a spinner.
   List<Map<String, dynamic>>? _rows;
   Object? _error;
   bool _loading = true;
   bool _opening = false;
+  final Map<String, RealtimeChannel> _presenceChannels = {};
+  final Set<String> _onlineUsers = {};
+  final Set<String> _presenceReadyUsers = {};
 
   @override
   void initState() {
@@ -69,8 +75,56 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
 
   @override
   void dispose() {
+    for (final channel in _presenceChannels.values) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    _presenceChannels.clear();
+    _onlineUsers.clear();
+    _presenceReadyUsers.clear();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToPresence() {
+    final session = Supabase.instance.client.auth.currentSession;
+    debugPrint('Admin User ID: ${session?.user.id}');
+    debugPrint('Session exists: ${session != null}');
+    debugPrint('Session expired: ${session?.isExpired}');
+    final supabase = Supabase.instance.client;
+    for (final account in _rows ?? <Map<String, dynamic>>[]) {
+      final userId = account['user_id'] as String;
+      if (_presenceChannels.containsKey(userId)) continue;
+      final channel = supabase.channel(
+        'presence:$userId',
+        opts: const RealtimeChannelConfig(private: true),
+      );
+      _presenceChannels[userId] = channel;
+      channel.onPresenceSync((payload) {
+        if (!mounted) return;
+        final online = channel.presenceState().isNotEmpty;
+        setState(() {
+          _presenceReadyUsers.add(userId);
+          if (online) {
+            _onlineUsers.add(userId);
+          } else {
+            _onlineUsers.remove(userId);
+          }
+        });
+        debugPrint('Presence $userId: $online');
+      });
+      channel.subscribe((status, error) {
+        debugPrint('Presence subscription: $status - $error');
+        if (!mounted) return;
+        if (status == RealtimeSubscribeStatus.channelError ||
+            status == RealtimeSubscribeStatus.timedOut ||
+            status == RealtimeSubscribeStatus.closed) {
+          setState(() {
+            _presenceReadyUsers.remove(userId);
+            _onlineUsers.remove(userId);
+          });
+        }
+      });
+    }
   }
 
   Future<void> _fetch() async {
@@ -81,6 +135,7 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
           _rows = data.rows;
           _error = null;
         });
+        _subscribeToPresence();
       }
     } catch (error) {
       debugPrint('Admin accounts load failed: ${error.runtimeType}');
@@ -132,6 +187,11 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
 
   bool _matches(Map<String, dynamic> row) {
     final blocked = row['is_blocked'] == true;
+    final userId = row['user_id'] as String;
+    final ready = blocked || _presenceReadyUsers.contains(userId);
+    final online = !blocked && _onlineUsers.contains(userId);
+    if (_presence == _PresenceFilter.online && (!ready || !online)) return false;
+    if (_presence == _PresenceFilter.offline && (!ready || online)) return false;
     if (_filter == _AccountFilter.active && blocked) return false;
     if (_filter == _AccountFilter.blocked && !blocked) return false;
     if (_type == _AccountType.helpSeeker && row['role'] != 'help_seeker') {
@@ -204,6 +264,8 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
               _filters(all.length, all.length - blockedCount, blockedCount),
               const SizedBox(height: 10),
               _typeFilters(all),
+              const SizedBox(height: 10),
+              _presenceFilters(all),
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 _RefreshFailedNotice(error: _error!, retry: _reload),
@@ -218,7 +280,13 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
                     SizedBox(
                       width: cardWidth,
                       child: _AccountCard(
-                        account: row,
+                        account: {
+                          ...row,
+                          'is_online': row['is_blocked'] != true &&
+                              _onlineUsers.contains(row['user_id']),
+                          'presence_ready': row['is_blocked'] == true ||
+                              _presenceReadyUsers.contains(row['user_id']),
+                        },
                         onTap: () => _open(row),
                       ),
                     ),
@@ -245,6 +313,26 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
     );
   }
 
+  Widget _presenceFilters(List<Map<String, dynamic>> all) {
+    final onlineCount = all.where((r) =>
+        r['is_blocked'] != true &&
+        _presenceReadyUsers.contains(r['user_id']) &&
+        _onlineUsers.contains(r['user_id'])).length;
+    final offlineCount = all.where((r) =>
+        r['is_blocked'] == true ||
+        (_presenceReadyUsers.contains(r['user_id']) &&
+            !_onlineUsers.contains(r['user_id']))).length;
+    return _FilterBar<_PresenceFilter>(
+      options: {
+        _PresenceFilter.all: 'All (${all.length})',
+        _PresenceFilter.online: 'Online ($onlineCount)',
+        _PresenceFilter.offline: 'Offline ($offlineCount)',
+      },
+      selected: _presence,
+      onChanged: (value) => setState(() => _presence = value),
+    );
+  }
+
   Widget _emptyState(bool noAccounts) {
     if (noAccounts) {
       return const EmptyState(
@@ -252,7 +340,8 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
         'Registered members will appear here.',
       );
     }
-    if (_search.isNotEmpty || _type != _AccountType.all) {
+    if (_search.isNotEmpty || _type != _AccountType.all ||
+        _presence != _PresenceFilter.all) {
       return const EmptyState(
         'No matching accounts',
         'Try a different search or filter.',
@@ -395,6 +484,10 @@ class _AccountCard extends StatelessWidget {
                   children: [
                     _AccountStatusChip(blocked: blocked),
                     RoleChip(_roleLabel(account['role'] as String?)),
+                    _PresenceChip(
+                      online: account['is_online'] == true && !blocked,
+                      ready: account['presence_ready'] == true || blocked,
+                    ),
                     if (account['pending_appeal'] != null)
                       const RoleChip('Appeal pending', pending: true),
                   ],
@@ -1282,6 +1375,32 @@ class _ReactivateAccountDialogState extends State<ReactivateAccountDialog> {
 
 bool _isStale(Object error, List<String> codes) =>
     error is PostgrestException && codes.any(error.message.contains);
+
+class _PresenceChip extends StatelessWidget {
+  final bool online;
+  final bool ready;
+  const _PresenceChip({required this.online, required this.ready});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready && online ? AppColors.success : AppColors.textMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Text(
+        !ready ? '● Checking...' : online ? '● Online' : '● Offline',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
 
 class _AccountStatusChip extends StatelessWidget {
   final bool blocked;

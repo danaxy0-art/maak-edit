@@ -20,10 +20,10 @@ import 'ui.dart';
 
 import 'chat_media.dart';
 import '../widgets/user_photo.dart';
+import '../widgets/peer_presence.dart';
 import '../../backend/chat/chat_media_policy.dart' show chatMediaCaption;
 import 'report_message.dart'; // ADDED: report a message
 import 'ratings.dart'; // Sprint 4: volunteer ratings
-import 'member_profile.dart'; // tap the chat header to open the profile
 
 class DataListPage extends StatefulWidget {
   final String title;
@@ -820,6 +820,12 @@ class ConversationsPage extends StatelessWidget {
                   row['contact_name'] as String? ?? 'Your peer',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
+                if (row['ended_at'] == null &&
+                    row['restricted_at'] == null &&
+                    otherParticipantId(row) != null) ...[
+                  const SizedBox(height: 4),
+                  PeerPresence(userId: otherParticipantId(row)!),
+                ],
                 const SizedBox(height: 7),
                 Text(
                   row['last_message'] as String? ?? 'Say hello to your peer.',
@@ -915,10 +921,9 @@ class _ConversationPageState extends State<ConversationPage>
     });
   }
 
+  String? _peerId;
   bool _ended = false;
   String? _endedBy;
-  // The other participant, for the header photo and profile link.
-  String? _otherId;
   DateTime? _currentEndedAt;
 
   // Admin restriction (support_requests.restricted_at, set by
@@ -1085,19 +1090,18 @@ class _ConversationPageState extends State<ConversationPage>
     try {
       final status = await SupabaseService.client
           .from('support_requests')
-          .select(
-            'ended_at, ended_by, restricted_at, restriction_reason, '
-            'seeker_id, volunteer_id',
-          )
+          .select('ended_at, ended_by, restricted_at, restriction_reason, seeker_id, volunteer_id')
           .eq('id', widget.requestId)
           .single();
-      final me = SupabaseService.currentUser?.id;
-      final otherId = status['seeker_id'] == me
-          ? status['volunteer_id'] as String?
-          : status['seeker_id'] as String?;
       final ended = status['ended_at'] != null;
       if (mounted) {
         setState(() {
+          final myId = SupabaseService.client.auth.currentUser?.id;
+          _peerId = myId == status['seeker_id']
+              ? status['volunteer_id'] as String?
+              : myId == status['volunteer_id']
+                  ? status['seeker_id'] as String?
+                  : null;
           _ended = ended;
           if (_ended) {
             _mediaBusy = false;
@@ -1105,7 +1109,6 @@ class _ConversationPageState extends State<ConversationPage>
           }
           _applyRestriction(status);
           _endedBy = status['ended_by'] as String?;
-          _otherId = otherId;
           _currentEndedAt = DateTime.tryParse('${status['ended_at'] ?? ''}');
           _statusLoading = false;
           _statusError = null;
@@ -1986,57 +1989,22 @@ class _ConversationPageState extends State<ConversationPage>
           ],
         ),
       ],
-      // Photo and name: tap to open the other person's profile.
-      title: Semantics(
-        button: _otherId != null,
-        label: _otherId == null
-            ? widget.name
-            : "${widget.name}, private conversation. Open profile",
-        excludeSemantics: true,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: _otherId == null
-              ? null
-              : () => MemberProfilePage.open(
-                    context,
-                    userId: _otherId!,
-                    name: widget.name,
-                  ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                UserPhoto(
-                  userId: _otherId,
-                  size: 36,
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundColor: MaakColors.blush,
-                    child: Text(
-                      initials(widget.name),
-                      style: const TextStyle(fontSize: 13, color: MaakColors.ink),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const Text(
-                        'Private conversation',
-                        style: TextStyle(fontSize: 12, color: MaakColors.muted),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (!_closed &&
+              !_statusLoading &&
+              _statusError == null &&
+              _peerId != null)
+            PeerPresence(userId: _peerId!)
+          else
+            const Text(
+              'Private conversation',
+              style: TextStyle(fontSize: 12, color: MaakColors.muted),
             ),
-          ),
-        ),
+        ],
       ),
     ),
     body: ResponsiveBody(
