@@ -25,7 +25,7 @@ part 'admin_accounts.dart';
 part 'admin_appeals.dart';
 part 'admin_reports.dart';
 part 'admin_articles.dart';
-
+part 'admin_analytics.dart';
 // Admin layouts use a wider content area on tablets while preserving
 // Ma'ak's existing theme, bottom navigation, and phone widths.
 class _AdminResponsiveBody extends StatelessWidget {
@@ -58,6 +58,7 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> {
   static const appealsTab = 4;
+  static const analyticsTab = 5;
   final _navigator = GlobalKey<NavigatorState>();
   int _index = 0;
   int _pendingAppeals = 0;
@@ -69,6 +70,8 @@ class _AdminShellState extends State<AdminShell> {
       ? const AccountsAdminPage()
       : index == appealsTab
       ? const AppealsAdminPage()
+      : index == analyticsTab
+      ? const AdminAnalyticsPage()
       : AdminOverview(select: _select);
   void _select(int index) {
     setState(() => _index = index);
@@ -138,6 +141,10 @@ class _AdminShellState extends State<AdminShell> {
           icon: Icons.rate_review_outlined,
           label: 'Appeals',
           unreadCount: _pendingAppeals,
+        ),
+        const MaakNavItem(
+          icon: Icons.analytics_outlined,
+          label: 'Analytics',
         ),
       ],
     ),
