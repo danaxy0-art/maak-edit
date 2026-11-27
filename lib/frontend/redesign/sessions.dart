@@ -13,6 +13,7 @@ import '../../backend/services/supabase_service.dart';
 import '../design/components.dart';
 import '../design/tokens.dart';
 import 'feedback.dart';
+import 'session_calendar_button.dart'; // Sprint 4 US5: add to phone calendar
 import 'ui.dart';
 
 // ---- Small date helpers (no extra package needed) ----------------------------
@@ -714,6 +715,9 @@ class _SessionCardState extends State<_SessionCard> {
                 style: MaakText.caption.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
+          // Sprint 4 US5: confirmed, upcoming sessions only; hidden on web.
+          if (_status == 'accepted' && _future)
+            SessionCalendarButton(session: s),
           if (_status == 'canceled' && s['canceled_by_me'] != true)
             const Padding(
               padding: EdgeInsets.only(top: 6),

@@ -8,6 +8,11 @@
     <!-- Notification vibration on older Android versions -->
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Sprint 4 US5: add confirmed support sessions to the phone calendar,
+         and find them again to avoid duplicates and update a rescheduled
+         session. Asked for only when the member taps "Add to calendar". -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
     <application
         android:label="Ma’ak"
         android:name="${applicationName}"
