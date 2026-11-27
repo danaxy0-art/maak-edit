@@ -378,8 +378,10 @@ class _LifeCycle extends StatelessWidget {
     final double filled;
     if (level.index <= reached) {
       filled = 1;
-    } else if (level == progress.next && nextMin != null && nextMin > 0) {
-      filled = (progress.supported / nextMin).clamp(0, 1).toDouble();
+    } else if (level == progress.next) {
+      // From the current badge's threshold, not from zero: just after
+      // reaching a badge the line to the next one starts empty.
+      filled = progress.towardNext ?? 0;
     } else {
       filled = 0;
     }

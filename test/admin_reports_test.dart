@@ -429,11 +429,21 @@ void main() {
   }
 
   group('US1 reports list', () {
-    testWidgets('Overview links to Message reports', (tester) async {
+    // The Overview entry is "Reports" (message and voice call reports, in
+    // tabs); it opens on the Message reports tab.
+    testWidgets('Overview links to Reports, on the Message reports tab', (
+      tester,
+    ) async {
       seed();
       await pumpAt(tester, AdminOverview(select: (_) {}), tallPhone);
-      await tester.tap(find.text('Message reports'));
+      expect(
+        find.text('Review message and voice call reports'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Reports'));
       await settle(tester);
+      expect(find.widgetWithText(Tab, 'Message reports'), findsOneWidget);
+      expect(find.widgetWithText(Tab, 'Voice call reports'), findsOneWidget);
       expect(find.text('1 report needs review'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

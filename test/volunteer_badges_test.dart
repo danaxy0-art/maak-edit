@@ -214,6 +214,7 @@ void main() {
             badge: BadgeLevel.beginner,
             next: BadgeLevel.intermediate,
             nextMin: 5,
+            currentMin: 1,
           ),
         ),
       );
@@ -245,7 +246,8 @@ void main() {
       expect(find.text(sentence), findsOneWidget);
       await tester.pump(const Duration(seconds: 7));
       await tester.pump(const Duration(seconds: 1));
-      expect(_link(tester, 'intermediate'), closeTo(0.6, 0.001));
+      // Measured from Beginner (1) to Intermediate (5): (3 - 1) / (5 - 1).
+      expect(_link(tester, 'intermediate'), closeTo(0.5, 0.001));
       expect(_link(tester, 'expert'), 0, reason: 'not the next stage yet');
       expect(
         find.bySemanticsLabel(
@@ -303,6 +305,101 @@ void main() {
       expect(_link(tester, 'intermediate'), 1);
       expect(_link(tester, 'expert'), 1);
       expect(find.bySemanticsLabel(RegExp('^Progress to')), findsNothing);
+    });
+
+    testScreen('just reached a badge: the line to the next one starts empty', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 5,
+            badge: BadgeLevel.intermediate,
+            next: BadgeLevel.expert,
+            nextMin: 15,
+            currentMin: 5,
+          ),
+        ),
+      );
+      expect(_link(tester, 'intermediate'), 1, reason: 'reached');
+      expect(_link(tester, 'expert'), 0, reason: 'was 5/15 = 33% before');
+    });
+
+    testScreen('halfway between two badges: half filled', (tester) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 10,
+            badge: BadgeLevel.intermediate,
+            next: BadgeLevel.expert,
+            nextMin: 15,
+            currentMin: 5,
+          ),
+        ),
+      );
+      expect(_link(tester, 'expert'), closeTo(0.5, 0.001));
+    });
+
+    test('progress toward the next badge is measured between thresholds', () {
+      BadgeProgress p(
+        int n,
+        BadgeLevel? b,
+        BadgeLevel? next,
+        int? nm,
+        int cm,
+      ) => BadgeProgress(
+        supported: n,
+        badge: b,
+        next: next,
+        nextMin: nm,
+        currentMin: cm,
+      );
+      expect(p(0, null, BadgeLevel.beginner, 1, 0).towardNext, 0);
+      expect(
+        p(1, BadgeLevel.beginner, BadgeLevel.intermediate, 5, 1).towardNext,
+        0,
+      );
+      expect(
+        p(4, BadgeLevel.beginner, BadgeLevel.intermediate, 5, 1).towardNext,
+        0.75,
+      );
+      expect(
+        p(14, BadgeLevel.intermediate, BadgeLevel.expert, 15, 5).towardNext,
+        closeTo(0.9, 1e-9),
+      );
+      expect(p(21, BadgeLevel.expert, null, null, 15).towardNext, isNull);
+      // Configured thresholds out of order never divide by zero.
+      expect(
+        p(5, BadgeLevel.intermediate, BadgeLevel.expert, 5, 5).towardNext,
+        isNull,
+      );
+    });
+
+    testScreen('the current threshold is read from the thresholds table', (
+      tester,
+    ) async {
+      await signIn('Sara');
+      fakeBackend = backendFrom({
+        '/rpc/my_maak_badge_progress': {
+          'supported': 10,
+          'badge': 'intermediate',
+          'next_badge': 'expert',
+          'next_min': 15,
+        },
+        '/volunteer_badge_levels': [
+          {'level': 'beginner', 'min_supported': 1},
+          {'level': 'intermediate', 'min_supported': 5},
+          {'level': 'expert', 'min_supported': 15},
+        ],
+      });
+      late BadgeProgress? p;
+      await tester.runAsync(
+        () async => p = await VolunteerStatsService.myBadgeProgress(),
+      );
+      expect(p!.currentMin, 5);
+      expect(p!.towardNext, closeTo(0.5, 1e-9));
     });
 
     testScreen('not a volunteer (server returns null): nothing shown', (

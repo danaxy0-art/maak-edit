@@ -241,10 +241,11 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
     final unavailable = switch (status['unavailable_reason']) {
       'appeal_pending' =>
         "Your appeal is being reviewed. You can't submit another until an administrator responds.",
-      'appeal_cooldown' => cooldownDays == null
-          ? 'You can appeal again after the 90-day waiting period.'
-          : 'Your last appeal was not approved. You can appeal again in $cooldownDays $dayWord'
-                '${cooldownUntil.isEmpty ? '' : ', on $cooldownUntil'}.',
+      'appeal_cooldown' =>
+        cooldownDays == null
+            ? 'You can appeal again after the 90-day waiting period.'
+            : 'Your last appeal was not approved. You can appeal again in $cooldownDays $dayWord'
+                  '${cooldownUntil.isEmpty ? '' : ', on $cooldownUntil'}.',
       'appeal_limit_reached' =>
         'You have used all $max appeals for this restriction.',
       _ => null,
@@ -313,7 +314,10 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.hourglass_bottom, color: AppColors.primaryNavy),
+                  const Icon(
+                    Icons.hourglass_bottom,
+                    color: AppColors.primaryNavy,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -347,7 +351,11 @@ class _BlockedAccountScreenState extends State<BlockedAccountScreen> {
             'The waiting period is over. You can submit one more appeal. '
             'If it is not approved, the next one opens 90 days after that decision.',
             key: ValueKey('appeal_cycle_available'),
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textMuted,
+              height: 1.4,
+            ),
           ),
         const SizedBox(height: 12),
         PrimaryButton(
@@ -409,13 +417,17 @@ class _AppealStatusChip extends StatelessWidget {
   const _AppealStatusChip(this.status);
 
   @override
-  Widget build(BuildContext context) => RoleChip(switch (status) {
-    'pending' => 'Pending',
-    'approved' => 'Approved',
-    'rejected' => 'Rejected',
-    'closed' => 'Closed',
-    _ => 'Unknown',
-  }, error: status == 'rejected', pending: status == 'pending');
+  Widget build(BuildContext context) => RoleChip(
+    switch (status) {
+      'pending' => 'Pending',
+      'approved' => 'Approved',
+      'rejected' => 'Rejected',
+      'closed' => 'Closed',
+      _ => 'Unknown',
+    },
+    error: status == 'rejected',
+    pending: status == 'pending',
+  );
 }
 
 /// Collects the appeal explanation. Pops the new appeal status on success, or
@@ -502,15 +514,112 @@ class _AppealDialogState extends State<AppealDialog> {
         ),
       ),
       actions: [
-        OutlinedButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: Text(_busy ? 'Submitting...' : 'Submit appeal'),
+        _DialogButtons(
+          labels: const ['Cancel', 'Submit appeal'],
+          cancel: OutlinedButton(
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(padding: _DialogButtons.padding),
+            child: const _ButtonLabel('Cancel'),
+          ),
+          action: FilledButton(
+            onPressed: _busy ? null : _submit,
+            style: FilledButton.styleFrom(padding: _DialogButtons.padding),
+            // The busy text shows for a moment while sending, with both
+            // buttons disabled; it may shrink to fit rather than split.
+            child: _busy
+                ? const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Submitting...', maxLines: 1),
+                  )
+                : const _ButtonLabel('Submit appeal'),
+          ),
         ),
       ],
     ),
   );
+}
+
+/// Cancel and the action side by side (equal widths and heights) whenever
+/// every word of every label fits in half the row, which covers normal text
+/// on all phones. With very large text on a narrow phone, where a word would
+/// otherwise be split, the two buttons stack at full width instead: labels
+/// never shrink below the member's text size and words are never broken.
+class _DialogButtons extends StatelessWidget {
+  final Widget cancel, action;
+
+  /// The texts the two buttons show when idle.
+  final List<String> labels;
+  const _DialogButtons({
+    required this.cancel,
+    required this.action,
+    required this.labels,
+  });
+
+  static const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 14);
+  static const _gap = 10.0;
+
+  // AlertDialog's default margins: 40 px inset on each side of the screen
+  // and 24 px of action padding inside the dialog. (A LayoutBuilder cannot
+  // be used here: the dialog sizes its content by intrinsic width.)
+  static const _dialogInset = 40.0, _actionsPadding = 24.0;
+
+  bool _wordsFit(BuildContext context, double space) {
+    final theme = Theme.of(context);
+    final style = DefaultTextStyle.of(context).style
+        .merge(theme.textTheme.labelLarge)
+        .merge(theme.filledButtonTheme.style?.textStyle?.resolve({}))
+        .merge(theme.outlinedButtonTheme.style?.textStyle?.resolve({}));
+    final scaler = MediaQuery.textScalerOf(context);
+    for (final label in labels) {
+      for (final word in label.split(' ')) {
+        final painter = TextPainter(
+          text: TextSpan(text: word, style: style),
+          textScaler: scaler,
+          textDirection: Directionality.of(context),
+        )..layout();
+        final width = painter.width;
+        painter.dispose();
+        // A little slack for font rounding between this and the button.
+        if (width > space - 2) return false;
+      }
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final row =
+        MediaQuery.sizeOf(context).width - 2 * (_dialogInset + _actionsPadding);
+    final half = (row - _gap) / 2 - padding.horizontal;
+    if (_wordsFit(context, half)) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: cancel),
+            const SizedBox(width: _gap),
+            Expanded(child: action),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        action,
+        const SizedBox(height: _gap),
+        cancel,
+      ],
+    );
+  }
+}
+
+/// A centred button label that wraps between words rather than shrinking.
+class _ButtonLabel extends StatelessWidget {
+  final String text;
+  const _ButtonLabel(this.text);
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, textAlign: TextAlign.center, softWrap: true);
 }
