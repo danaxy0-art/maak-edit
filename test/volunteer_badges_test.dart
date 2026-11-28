@@ -1,0 +1,701 @@
+// Sprint 4 US3/US4: widget checks for lib/frontend/redesign/badges.dart and
+// where badges appear. Badge levels are derived and authorised in the
+// database; see tests/database/volunteer_badges_test.mjs.
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:maak_app/backend/services/volunteer_stats_service.dart';
+import 'package:maak_app/frontend/redesign/badges.dart';
+import 'package:maak_app/frontend/redesign/profile.dart';
+import 'package:maak_app/frontend/redesign/ratings.dart';
+import 'package:maak_app/frontend/redesign/support.dart';
+
+import 'helpers/screen_harness.dart';
+
+List<http.Request> _calls(String rpc) =>
+    sentRequests.where((r) => r.url.path.endsWith('/rpc/$rpc')).toList();
+
+Map<String, Object?> _stats(String id, {String? badge, int count = 0}) => {
+  'volunteer_id': id,
+  'rating_count': count,
+  'average_rating': null,
+  'badge': badge,
+};
+
+Widget _progress(Future<BadgeProgress?> Function() load) => Scaffold(
+  body: Padding(
+    padding: const EdgeInsets.all(16),
+    child: MyBadgeProgressCard(load: load),
+  ),
+);
+
+/// The whole text of the card's info popup.
+String? _popup(WidgetTester tester) => tester
+    .widget<Tooltip>(find.byKey(const ValueKey('badge_progress_info')))
+    .message;
+
+/// The progress sentence: the first line of the info popup.
+String? _info(WidgetTester tester) => _popup(tester)?.split('\n').first;
+
+/// How much of the gradient line into a stage is filled, 0 to 1.
+double? _link(WidgetTester tester, String stage) => tester
+    .widget<FractionallySizedBox>(find.byKey(ValueKey('link_$stage')))
+    .widthFactor;
+
+/// Semantics label of one life-cycle stage.
+Finder _stage(String label) => find.bySemanticsLabel(label);
+
+void main() {
+  setUpAll(setUpScreenHarness);
+  setUp(VolunteerStatsService.resetCache);
+
+  test('badge levels parse from the server and ignore unknown values', () {
+    expect(BadgeLevel.parse('beginner'), BadgeLevel.beginner);
+    expect(BadgeLevel.parse('intermediate'), BadgeLevel.intermediate);
+    expect(BadgeLevel.parse('expert'), BadgeLevel.expert);
+    expect(BadgeLevel.parse(null), isNull);
+    expect(BadgeLevel.parse('master'), isNull);
+    final s = VolunteerStats.fromJson({
+      'volunteer_id': 'v1',
+      'rating_count': 0,
+      'badge': 'expert',
+    });
+    expect(s.badge, BadgeLevel.expert);
+  });
+
+  testWidgets('each badge has a text label, its own look and a spoken name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              BadgeChip(BadgeLevel.beginner),
+              BadgeChip(BadgeLevel.intermediate),
+              BadgeChip(BadgeLevel.expert),
+            ],
+          ),
+        ),
+      ),
+    );
+    final colors = <Color?>{};
+    for (final level in BadgeLevel.values) {
+      expect(find.text('${level.label} badge'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('${level.label} participation badge'),
+        findsOneWidget,
+      );
+      final box = tester.widget<Container>(
+        find.byKey(ValueKey('badge_${level.name}')),
+      );
+      colors.add((box.decoration! as BoxDecoration).color);
+    }
+    expect(colors, hasLength(3), reason: 'visually distinct levels');
+  });
+
+  group('VolunteerStatsLine', () {
+    testScreen('shows the badge next to the rating summary', (tester) async {
+      fakeBackend = backendFrom({
+        '/rpc/maak_volunteer_stats': [_stats('v1', badge: 'intermediate')],
+      });
+      await pumpScreen(
+        tester,
+        const Scaffold(body: VolunteerStatsLine(volunteerId: 'v1')),
+      );
+      expect(find.text('Intermediate badge'), findsOneWidget);
+      expect(find.text('No ratings yet'), findsOneWidget);
+      expect(find.text(badgeMeaning), findsNothing, reason: 'cards stay short');
+    });
+
+    testScreen('no badge yet: rating summary only, no empty chip', (
+      tester,
+    ) async {
+      fakeBackend = backendFrom({
+        '/rpc/maak_volunteer_stats': [_stats('v1')],
+      });
+      await pumpScreen(
+        tester,
+        const Scaffold(
+          body: VolunteerStatsLine(volunteerId: 'v1', explainBadge: true),
+        ),
+      );
+      expect(find.byType(BadgeChip), findsNothing);
+      expect(find.text(badgeMeaning), findsNothing);
+      expect(find.text('No ratings yet'), findsOneWidget);
+    });
+
+    testScreen('cards and profile in one screen share one stats request', (
+      tester,
+    ) async {
+      fakeBackend = backendFrom({
+        '/rpc/maak_volunteer_stats': [
+          _stats('v1', badge: 'expert', count: 1),
+          _stats('v2', badge: 'beginner'),
+        ],
+      });
+      await pumpScreen(
+        tester,
+        const Scaffold(
+          body: Column(
+            children: [
+              VolunteerStatsLine(volunteerId: 'v1'),
+              VolunteerStatsLine(volunteerId: 'v2'),
+              VolunteerStatsLine(volunteerId: 'v1', explainBadge: true),
+            ],
+          ),
+        ),
+      );
+      expect(_calls('maak_volunteer_stats'), hasLength(1));
+      expect(find.text('Expert badge'), findsNWidgets(2));
+      expect(find.text('Beginner badge'), findsOneWidget);
+      expect(find.text('1 rating'), findsNWidgets(2));
+    });
+  });
+
+  testScreen('volunteer profile shows the badge and what it means', (
+    tester,
+  ) async {
+    fakeBackend = backendFrom({
+      '/rpc/maak_volunteer_stats': [_stats('v1', badge: 'expert', count: 4)],
+    });
+    await pumpScreen(
+      tester,
+      const VolunteerDetailPage(
+        volunteer: {
+          'user_id': 'v1',
+          'full_name': 'Sara Omar',
+          'condition': 'Diabetes',
+          'language': 'English',
+        },
+      ),
+    );
+    expect(find.text('Expert badge'), findsOneWidget);
+    expect(find.text(badgeMeaning), findsOneWidget);
+    expect(find.text('4 ratings'), findsOneWidget);
+    expect(find.text('Approved volunteer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testScreen('volunteer directory shows badges on cards', (tester) async {
+    await signIn('Dana');
+    fakeBackend = backendFrom({
+      '/rpc/browse_volunteers': [
+        {
+          'user_id': 'v1',
+          'full_name': 'Sara Omar',
+          'condition': 'Diabetes',
+          'language': 'English',
+        },
+        {
+          'user_id': 'v2',
+          'full_name': 'Lina Saad',
+          'condition': 'Asthma',
+          'language': 'Arabic',
+        },
+      ],
+      '/rpc/maak_volunteer_stats': [
+        _stats('v1', badge: 'beginner'),
+        _stats('v2'),
+      ],
+    });
+    await pumpScreen(tester, const VolunteerDirectoryPage());
+    expect(find.text('Beginner badge'), findsOneWidget);
+    expect(find.byType(BadgeChip), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  group('MyBadgeProgressCard', () {
+    testScreen('loading, then the current badge and the next goal', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 3,
+            badge: BadgeLevel.beginner,
+            next: BadgeLevel.intermediate,
+            nextMin: 5,
+            currentMin: 1,
+          ),
+        ),
+      );
+      expect(find.byType(BadgeChip), findsNothing, reason: 'stages, no pill');
+      for (final name in ['Worm', 'Larva', 'Ladybug']) {
+        expect(find.text(name), findsOneWidget);
+      }
+      expect(
+        _stage('Worm, Beginner badge, your current badge'),
+        findsOneWidget,
+      );
+      expect(
+        _stage('Larva, Intermediate badge, not earned yet'),
+        findsOneWidget,
+      );
+      expect(_stage('Ladybug, Expert badge, not earned yet'), findsOneWidget);
+      const sentence =
+          'You have supported 3 help seekers. 2 more to earn the Intermediate badge.';
+      expect(_info(tester), sentence);
+      expect(find.text(sentence), findsNothing, reason: 'behind the i button');
+      expect(find.text(badgeMeaning), findsNothing);
+      expect(
+        find.textContaining('Each help seeker counts once'),
+        findsNothing,
+        reason: 'long explanation removed',
+      );
+      // The popup: the sentence, how help seekers count, and the disclaimer.
+      expect(
+        _popup(tester),
+        '$sentence\n'
+        'Each help seeker counts once.\n'
+        'Participation badges are not a medical qualification.',
+      );
+      await tester.tap(find.byKey(const ValueKey('badge_progress_info')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining(sentence), findsOneWidget);
+      expect(
+        find.textContaining('not a medical qualification'),
+        findsOneWidget,
+      );
+      // Opened on purpose, it stays until dismissed (readable at any pace);
+      // a tap anywhere else closes it.
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.textContaining(sentence), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.textContaining(sentence),
+        findsNothing,
+        reason: 'closed by a tap elsewhere',
+      );
+      // Measured from Beginner (1) to Intermediate (5): (3 - 1) / (5 - 1).
+      expect(_link(tester, 'intermediate'), closeTo(0.5, 0.001));
+      expect(_link(tester, 'expert'), 0, reason: 'not the next stage yet');
+      expect(
+        find.bySemanticsLabel(
+          'Progress to the Intermediate badge: 3 of 5 help seekers supported',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows a loading placeholder while waiting', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: _progress(() => Future.delayed(Duration(hours: 1)))),
+      );
+      expect(find.bySemanticsLabel('Loading your badge'), findsOneWidget);
+      await tester.pump(const Duration(hours: 1));
+    });
+
+    testScreen('no badge yet explains how to earn Beginner', (tester) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 0,
+            next: BadgeLevel.beginner,
+            nextMin: 1,
+          ),
+        ),
+      );
+      expect(find.byType(BadgeChip), findsNothing);
+      expect(
+        _info(tester),
+        'No badge yet. Support your first help seeker to earn the Beginner badge.',
+      );
+      expect(_stage('Worm, Beginner badge, not earned yet'), findsOneWidget);
+    });
+
+    testScreen('expert: highest badge, no progress bar', (tester) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async =>
+              const BadgeProgress(supported: 21, badge: BadgeLevel.expert),
+        ),
+      );
+      expect(_stage('Worm, Beginner badge, earned'), findsOneWidget);
+      expect(_stage('Larva, Intermediate badge, earned'), findsOneWidget);
+      expect(
+        _stage('Ladybug, Expert badge, your current badge'),
+        findsOneWidget,
+      );
+      expect(
+        _info(tester),
+        'You have supported 21 help seekers. This is the highest badge.',
+      );
+      expect(_link(tester, 'intermediate'), 1);
+      expect(_link(tester, 'expert'), 1);
+      expect(find.bySemanticsLabel(RegExp('^Progress to')), findsNothing);
+    });
+
+    testScreen('just reached a badge: the line to the next one starts empty', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 5,
+            badge: BadgeLevel.intermediate,
+            next: BadgeLevel.expert,
+            nextMin: 15,
+            currentMin: 5,
+          ),
+        ),
+      );
+      expect(_link(tester, 'intermediate'), 1, reason: 'reached');
+      expect(_link(tester, 'expert'), 0, reason: 'was 5/15 = 33% before');
+    });
+
+    testScreen('halfway between two badges: half filled', (tester) async {
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 10,
+            badge: BadgeLevel.intermediate,
+            next: BadgeLevel.expert,
+            nextMin: 15,
+            currentMin: 5,
+          ),
+        ),
+      );
+      expect(_link(tester, 'expert'), closeTo(0.5, 0.001));
+    });
+
+    test('progress toward the next badge is measured between thresholds', () {
+      BadgeProgress p(
+        int n,
+        BadgeLevel? b,
+        BadgeLevel? next,
+        int? nm,
+        int cm,
+      ) => BadgeProgress(
+        supported: n,
+        badge: b,
+        next: next,
+        nextMin: nm,
+        currentMin: cm,
+      );
+      expect(p(0, null, BadgeLevel.beginner, 1, 0).towardNext, 0);
+      expect(
+        p(1, BadgeLevel.beginner, BadgeLevel.intermediate, 5, 1).towardNext,
+        0,
+      );
+      expect(
+        p(4, BadgeLevel.beginner, BadgeLevel.intermediate, 5, 1).towardNext,
+        0.75,
+      );
+      expect(
+        p(14, BadgeLevel.intermediate, BadgeLevel.expert, 15, 5).towardNext,
+        closeTo(0.9, 1e-9),
+      );
+      expect(p(21, BadgeLevel.expert, null, null, 15).towardNext, isNull);
+      // Configured thresholds out of order never divide by zero.
+      expect(
+        p(5, BadgeLevel.intermediate, BadgeLevel.expert, 5, 5).towardNext,
+        isNull,
+      );
+    });
+
+    testScreen('the current threshold is read from the thresholds table', (
+      tester,
+    ) async {
+      await signIn('Sara');
+      fakeBackend = backendFrom({
+        '/rpc/my_maak_badge_progress': {
+          'supported': 10,
+          'badge': 'intermediate',
+          'next_badge': 'expert',
+          'next_min': 15,
+        },
+        '/volunteer_badge_levels': [
+          {'level': 'beginner', 'min_supported': 1},
+          {'level': 'intermediate', 'min_supported': 5},
+          {'level': 'expert', 'min_supported': 15},
+        ],
+      });
+      late BadgeProgress? p;
+      await tester.runAsync(
+        () async => p = await VolunteerStatsService.myBadgeProgress(),
+      );
+      expect(p!.currentMin, 5);
+      expect(p!.towardNext, closeTo(0.5, 1e-9));
+    });
+
+    group('info button accessibility', () {
+      const p = BadgeProgress(
+        supported: 3,
+        badge: BadgeLevel.beginner,
+        next: BadgeLevel.intermediate,
+        nextMin: 5,
+        currentMin: 1,
+      );
+      final button = find.byKey(const ValueKey('badge_progress_info_button'));
+
+      testScreen('a 48 x 48 target around an 18 px icon', (tester) async {
+        await pumpScreen(tester, _progress(() async => p));
+        expect(tester.getSize(button), const Size(48, 48));
+        final icon = tester.widget<Icon>(
+          find.descendant(of: button, matching: find.byType(Icon)),
+        );
+        expect(
+          tester.getSize(
+            find.descendant(of: button, matching: find.byType(Icon)),
+          ),
+          const Size(18, 18),
+        );
+        expect(icon.icon, Icons.info_outline_rounded);
+      });
+
+      testScreen('screen readers: a named button that carries the popup text', (
+        tester,
+      ) async {
+        await pumpScreen(tester, _progress(() async => p));
+        final node = tester.getSemantics(
+          find.bySemanticsLabel(RegExp('About your badge')),
+        );
+        expect(node.label, contains('About your badge'));
+        expect(node.hint, contains('You have supported 3 help seekers.'));
+        expect(node.hint, contains('Each help seeker counts once.'));
+        expect(
+          node.hint,
+          contains('Participation badges are not a medical qualification.'),
+        );
+        expect(node, isSemantics(isButton: true, isFocusable: true));
+      });
+
+      for (final key in [LogicalKeyboardKey.enter, LogicalKeyboardKey.space]) {
+        testScreen('keyboard: Tab reaches it and ${key.keyLabel} opens it', (
+          tester,
+        ) async {
+          await pumpScreen(tester, _progress(() async => p));
+          var focused = false;
+          for (var i = 0; i < 12 && !focused; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+            final ctx = FocusManager.instance.primaryFocus?.context;
+            focused =
+                ctx != null &&
+                find
+                    .ancestor(of: find.byWidget(ctx.widget), matching: button)
+                    .evaluate()
+                    .isNotEmpty;
+          }
+          expect(focused, isTrue, reason: 'reachable with Tab');
+          await tester.sendKeyEvent(key);
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(
+            find.textContaining('Each help seeker counts once.'),
+            findsOneWidget,
+          );
+          await tester.pump(const Duration(seconds: 10));
+        });
+      }
+
+      testScreen('touch: tapping the icon opens the popup', (tester) async {
+        await pumpScreen(tester, _progress(() async => p));
+        await tester.tap(button);
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.textContaining('not a medical qualification'),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 10));
+      });
+
+      testScreen('the card still fits narrow phones and large text', (
+        tester,
+      ) async {
+        for (final width in [320.0, 360.0, 390.0]) {
+          for (final scale in [1.0, 1.3, 2.0]) {
+            await pumpScreen(
+              tester,
+              Scaffold(
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: MyBadgeProgressCard(load: () async => p),
+                ),
+              ),
+              size: Size(width, 1000),
+              textScale: scale,
+            );
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: 'no overflow at ${width.toInt()} px, x$scale',
+            );
+            expect(tester.getSize(button), const Size(48, 48));
+          }
+        }
+      });
+    });
+
+    testScreen('not a volunteer (server returns null): nothing shown', (
+      tester,
+    ) async {
+      await pumpScreen(tester, _progress(() async => null));
+      expect(find.byKey(const ValueKey('my_badge_card')), findsNothing);
+    });
+
+    testScreen('a failed load offers Retry', (tester) async {
+      var calls = 0;
+      await pumpScreen(
+        tester,
+        _progress(() async {
+          if (calls++ == 0) throw http.ClientException('offline');
+          return const BadgeProgress(
+            supported: 1,
+            badge: BadgeLevel.beginner,
+            next: BadgeLevel.intermediate,
+            nextMin: 5,
+          );
+        }),
+      );
+      expect(find.textContaining('Could not load your badge.'), findsOneWidget);
+      await tester.tap(find.text('Retry'));
+      await settle(tester);
+      expect(
+        _stage('Worm, Beginner badge, your current badge'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  testScreen('a volunteer\'s own profile shows their badge progress', (
+    tester,
+  ) async {
+    await signIn('Sara');
+    fakeBackend = (request) {
+      final path = request.url.path;
+      final single =
+          request.headers['accept']?.contains('vnd.pgrst.object') == true;
+      Object? body;
+      if (path.endsWith('/profiles')) {
+        final row = {
+          'full_name': 'Sara',
+          'username': 'sara',
+          'role': 'volunteer',
+        };
+        body = single ? row : [row];
+      } else if (path.endsWith('/volunteer_profiles')) {
+        final row = {
+          'user_id': '00000000-0000-0000-0000-000000000001',
+          'condition_experience': 'Diabetes',
+          'preferred_language': 'English',
+          'experience_description': 'Story',
+          'status': 'approved',
+        };
+        body = single ? row : [row];
+      } else if (path.endsWith('/rpc/my_maak_badge_progress')) {
+        body = {
+          'supported': 6,
+          'badge': 'intermediate',
+          'next_badge': 'expert',
+          'next_min': 15,
+        };
+      }
+      return body == null ? null : Future.value(jsonResponse(request, body));
+    };
+    await pumpScreen(tester, const ProfilePage(role: 'volunteer'));
+    expect(find.text('My participation badge'), findsOneWidget);
+    expect(
+      _stage('Larva, Intermediate badge, your current badge'),
+      findsOneWidget,
+    );
+    expect(
+      _info(tester),
+      'You have supported 6 help seekers. 9 more to earn the Expert badge.',
+    );
+  });
+
+  testScreen('a help seeker\'s own profile has no badge card', (tester) async {
+    await signIn('Dana');
+    fakeBackend = (request) {
+      final path = request.url.path;
+      final single =
+          request.headers['accept']?.contains('vnd.pgrst.object') == true;
+      if (path.endsWith('/profiles')) {
+        final row = {
+          'full_name': 'Dana',
+          'username': 'dana',
+          'role': 'help_seeker',
+        };
+        return Future.value(jsonResponse(request, single ? row : [row]));
+      }
+      return null;
+    };
+    await pumpScreen(tester, const ProfilePage(role: 'help_seeker'));
+    expect(find.text('Dana'), findsWidgets);
+    expect(find.text('My participation badge'), findsNothing);
+    expect(_calls('my_maak_badge_progress'), isEmpty);
+  });
+
+  group('badge requirement messages', () {
+    String? tip(WidgetTester tester, String level) => tester
+        .widget<Tooltip>(find.byKey(ValueKey('badge_requirement_$level')))
+        .message;
+
+    testScreen('each stage shows how many help seekers it takes', (
+      tester,
+    ) async {
+      fakeBackend = backendFrom({
+        '/volunteer_badge_levels': [
+          {'level': 'beginner', 'min_supported': 1},
+          {'level': 'intermediate', 'min_supported': 4},
+          {'level': 'expert', 'min_supported': 12},
+        ],
+      });
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 3,
+            badge: BadgeLevel.beginner,
+            next: BadgeLevel.intermediate,
+            nextMin: 4,
+          ),
+        ),
+      );
+      expect(
+        tip(tester, 'beginner'),
+        'Worm (Beginner badge): support your first help seeker to earn it.',
+      );
+      expect(
+        tip(tester, 'intermediate'),
+        'Larva (Intermediate badge): support 4 different help seekers to earn it.',
+      );
+      expect(
+        tip(tester, 'expert'),
+        'Ladybug (Expert badge): support 12 different help seekers to earn it.',
+      );
+      const larva =
+          'Larva (Intermediate badge): support 4 different help seekers to earn it.';
+      expect(find.text(larva), findsNothing, reason: 'only after a tap');
+      await tester.tap(find.text('Larva'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text(larva), findsOneWidget);
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testScreen('a badge pill shows its requirement (defaults if unavailable)', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        const Scaffold(body: Center(child: BadgeChip(BadgeLevel.expert))),
+      );
+      expect(
+        tip(tester, 'expert'),
+        'Expert badge: support 15 different help seekers to earn it.',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
