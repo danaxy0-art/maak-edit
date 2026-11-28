@@ -534,7 +534,7 @@ class _HealthLibraryPageState extends State<HealthLibraryPage> {
         ? (condition['name'] ?? '').toString()
         : '';
     final count = (article['like_count'] as num?)?.toInt() ?? 0;
-    final comments = (article['comment_count'] as num?)?.toInt() ?? 0;
+    final comments = (article['comment_count'] as num?)?.toInt();
     final busy = _busy.contains(id);
     final image = (article['image_url'] ?? '').toString();
     Future<void> open({bool comments = false}) async {
@@ -595,7 +595,9 @@ class _HealthLibraryPageState extends State<HealthLibraryPage> {
               icon: const Icon(Icons.chat_bubble_outline,
                   color: MaakColors.coralDeep),
             ),
-            Text('$comments', style: const TextStyle(color: MaakColors.muted)),
+            Text(comments?.toString() ?? '—',
+                semanticsLabel: comments == null ? 'Comment count unavailable' : '$comments comments',
+                style: const TextStyle(color: MaakColors.muted)),
             const Spacer(),
             // Save sits on the right, apart from like and comment.
             IconButton(

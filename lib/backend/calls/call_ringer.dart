@@ -8,8 +8,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 /// answered, declined or over.
 ///
 /// With the app closed or in the background, the push itself rings (send-push
-/// uses the 'maak_calls' channel, tag call-<request id>). In the foreground
-/// that push is not shown, so this plays assets/sounds/ringtone.wav in a loop
+/// uses the 'maak_calls' channel, tag `call-<request id>`). In the foreground
+///  /// that push is not shown, so this plays assets/sounds/ringtone.wav in a loop
 /// at ringtone volume (Android: it follows the ringer volume and silent mode).
 class CallRinger {
   CallRinger._();

@@ -52,35 +52,39 @@ class HealthLibraryService {
 
     // Fetch published rows before filtering locally, so user search strings
     // cannot become PostgREST filter syntax.
-    final rows = List<Map<String, dynamic>>.from(await query);
+    final rows = await _readPages((start, end) async =>
+        List<Map<String, dynamic>>.from(
+          await query.order('id').range(start, end),
+        ));
     final ids = rows.map((row) => row['id'] as String).toList();
     if (ids.isEmpty) return [];
 
-    // Fetch only the current user's likes to avoid retrieving other users'
-    // individual like records, regardless of the database's read policy.
-    final likes = List<Map<String, dynamic>>.from(
-      await _db
-          .from('article_likes')
-          .select('article_id')
-          .eq('user_id', _userId)
-          .inFilter('article_id', ids),
-    );
-
-    final saves = List<Map<String, dynamic>>.from(
-      await _db
-          .from('saved_articles')
-          .select('article_id')
-          .eq('user_id', _userId)
-          .inFilter('article_id', ids),
-    );
+    // Keep each URL and response bounded, including large saved collections.
+    final likes = <Map<String, dynamic>>[];
+    final saves = <Map<String, dynamic>>[];
+    for (var offset = 0; offset < ids.length; offset += _pageSize) {
+      final end = (offset + _pageSize).clamp(0, ids.length).toInt();
+      final batch = ids.sublist(offset, end);
+      likes.addAll(await _readPages((start, end) async =>
+          List<Map<String, dynamic>>.from(await _db
+              .from('article_likes').select('article_id')
+              .eq('user_id', _userId).inFilter('article_id', batch)
+              .order('article_id').range(start, end))));
+      saves.addAll(await _readPages((start, end) async =>
+          List<Map<String, dynamic>>.from(await _db
+              .from('saved_articles').select('article_id')
+              .eq('user_id', _userId).inFilter('article_id', batch)
+              .order('article_id').range(start, end))));
+    }
 
     final counts = <String, int>{};
 
     // Aggregate counts are returned by a narrowly scoped database function.
     // RLS should hide other users' individual like rows.
-    final publicCounts = List<dynamic>.from(
-      await _db.rpc('health_article_like_counts'),
-    );
+    final publicCounts = await _readPages((start, end) async =>
+        List<Map<String, dynamic>>.from(await _db
+            .rpc('health_article_like_counts').order('article_id')
+            .range(start, end))); 
 
     for (final item in publicCounts) {
       final countRow = Map<String, dynamic>.from(item as Map);
@@ -92,16 +96,19 @@ class HealthLibraryService {
     // migration still shows the library.
     final commentCounts = <String, int>{};
 
+    var commentCountsAvailable = false;
     try {
-      final rows = List<dynamic>.from(
-        await _db.rpc('health_article_comment_counts'),
-      );
+      final rows = await _readPages((start, end) async =>
+          List<Map<String, dynamic>>.from(await _db
+              .rpc('health_article_comment_counts').order('article_id')
+              .range(start, end))); 
 
       for (final item in rows) {
         final row = Map<String, dynamic>.from(item as Map);
         commentCounts[row['article_id'] as String] =
             (row['comment_count'] as num).toInt();
       }
+      commentCountsAvailable = true;
     } catch (error) {
       // Preserve library availability while making failures visible during
       // development without logging potentially sensitive user data.
@@ -137,7 +144,7 @@ class HealthLibraryService {
       result.add({
         ...row,
         'like_count': counts[id] ?? 0,
-        'comment_count': commentCounts[id] ?? 0,
+        'comment_count': commentCountsAvailable ? (commentCounts[id] ?? 0) : null,
         'is_liked': liked.contains(id),
         'is_saved': saved.contains(id),
       });
@@ -160,6 +167,22 @@ class HealthLibraryService {
     }
 
     return result;
+  }
+
+  static const _pageSize = 100;
+
+  // Continue until an empty page, even if the server caps page sizes.
+  static Future<List<Map<String, dynamic>>> _readPages(
+    Future<List<Map<String, dynamic>>> Function(int, int) fetch,
+  ) async {
+    final result = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final page = await fetch(offset, offset + _pageSize - 1);
+      if (page.isEmpty) return result;
+      result.addAll(page);
+      offset += page.length;
+    }
   }
 
   static DateTime _date(Map<String, dynamic> row) =>
@@ -195,17 +218,9 @@ class HealthLibraryService {
         .eq('article_id', articleId)
         .maybeSingle();
 
-    var count = 0;
-
-    for (final item in List<dynamic>.from(
-      await _db.rpc('health_article_like_counts'),
-    )) {
-      final row = Map<String, dynamic>.from(item as Map);
-
-      if (row['article_id'] == articleId) {
-        count = (row['like_count'] as num).toInt();
-      }
-    }
+    final countRow = await _db.rpc('health_article_like_counts')
+        .eq('article_id', articleId).maybeSingle();
+    final count = (countRow?['like_count'] as num?)?.toInt() ?? 0;
 
     return {
       'is_liked': like != null,
