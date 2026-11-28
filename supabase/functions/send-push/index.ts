@@ -159,8 +159,13 @@ Deno.serve(async (req) => {
   if (input.notification_id) data.id = String(input.notification_id);
 
   // Messages from one conversation replace each other instead of piling up.
+  // A call's ringing notification and its missed-call notification share a
+  // tag, so "Missed voice call" replaces "Incoming voice call" on the phone.
+  const isCall = kind === "voice_call";
   const tag = kind === "message" && input.reference_id
     ? `chat-${input.reference_id}`
+    : (isCall || kind === "voice_call_missed") && input.reference_id
+    ? `call-${input.reference_id}`
     : undefined;
 
   let sent = 0;
@@ -179,19 +184,34 @@ Deno.serve(async (req) => {
           data,
           android: {
             priority: "high",
+            // A call rings for at most 60 seconds: never deliver one late.
+            ...(isCall ? { ttl: "45s" } : {}),
             notification: {
-              // High-importance channel created by the app (MainActivity.kt):
-              // pops up on screen, plays the sound and vibrates.
-              channel_id: "maak_alerts",
+              // Channels created by the app (MainActivity.kt). maak_alerts:
+              // pops up, plays the notification sound and vibrates.
+              // maak_calls: plays the phone's ringtone with a long vibration.
+              channel_id: isCall ? "maak_calls" : "maak_alerts",
               sound: "default",
-              default_vibrate_timings: true,
-              notification_priority: "PRIORITY_HIGH", // Android 7 and older
+              ...(isCall
+                ? { visibility: "PUBLIC", notification_priority: "PRIORITY_MAX" }
+                : {
+                  default_vibrate_timings: true,
+                  notification_priority: "PRIORITY_HIGH", // Android 7 and older
+                }),
               ...(tag ? { tag } : {}),
             },
           },
           apns: {
-            headers: { "apns-priority": "10" },
-            payload: { aps: { sound: "default" } },
+            headers: {
+              "apns-priority": "10",
+              ...(isCall ? { "apns-expiration": String(Math.floor(Date.now() / 1000) + 45) } : {}),
+            },
+            payload: {
+              aps: {
+                sound: "default",
+                ...(isCall ? { "interruption-level": "time-sensitive" } : {}),
+              },
+            },
           },
         },
       }),

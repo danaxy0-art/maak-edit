@@ -780,7 +780,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('only a restricted conversation offers Lift restriction', (
+    testWidgets('only a restricted conversation offers Let them chat again', (
       tester,
     ) async {
       seed();
@@ -818,16 +818,16 @@ void main() {
         findsOneWidget,
       );
       await tapLift(tester);
-      expect(find.text('Lift this restriction?'), findsOneWidget);
+      expect(find.text('Let them chat again?'), findsOneWidget);
       expect(find.textContaining('without your reason'), findsOneWidget);
       expect(
         tester.widget<AlertDialog>(find.byType(AlertDialog)).actionsAlignment,
         MainAxisAlignment.center,
       );
-      await tester.tap(confirm('Lift restriction'));
+      await tester.tap(confirm('Allow chat'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Explain why the restriction is lifted'),
+        find.text('Explain why they can chat again'),
         findsOneWidget,
       );
       expect(count('admin_lift_conversation_restriction'), 0);
@@ -835,14 +835,14 @@ void main() {
         inDialog(find.byType(TextField)),
         ' Restricted by mistake ',
       );
-      await tester.tap(confirm('Lift restriction'));
+      await tester.tap(confirm('Allow chat'));
       await settle(tester);
       expect(bodies['admin_lift_conversation_restriction'], {
         'p_request_id': '60000000-0000-0000-0000-0000000000c1',
         'p_reason': 'Restricted by mistake',
       });
       expect(
-        find.text('Restriction lifted. Both participants were notified.'),
+        find.text('They can chat again. Both participants were notified.'),
         findsOneWidget,
       );
       expect(
@@ -851,7 +851,7 @@ void main() {
       );
       expect(find.text('Ended by an administrator'), findsNothing);
       expect(
-        find.text('Restriction lifted by Amal Admin (you)'),
+        find.text('Chat allowed again by Amal Admin (you)'),
         findsOneWidget,
       );
       expect(find.text('Restricted by mistake'), findsOneWidget);
@@ -868,7 +868,7 @@ void main() {
       );
       await tapLift(tester);
       await tester.enterText(inDialog(find.byType(TextField)), 'Not needed');
-      await tester.tap(confirm('Lift restriction'));
+      await tester.tap(confirm('Allow chat'));
       await settle(tester);
       expect(find.byType(AlertDialog), findsNothing);
       expect(
@@ -878,7 +878,7 @@ void main() {
     });
 
     test('lift reason follows the server rule', () {
-      expect(validateLiftReason(' '), 'Explain why the restriction is lifted');
+      expect(validateLiftReason(' '), 'Explain why they can chat again');
       expect(validateLiftReason('x' * 501), 'Use at most 500 characters');
       expect(validateLiftReason('ok'), isNull);
     });

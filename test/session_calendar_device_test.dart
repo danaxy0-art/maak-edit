@@ -55,6 +55,7 @@ class FakePlugin implements DeviceCalendar {
     EventOptionsAndroid? android,
   }) async {
     calls.add('create');
+    createdIn = calendarId;
     final id = 'evt-${events.length + 1}';
     if (!dropAfterCreate) {
       events[id] = _event(id, title, startDate, endDate, description);
@@ -64,10 +65,19 @@ class FakePlugin implements DeviceCalendar {
   }
 
   ({String title, DateTime start, String? timeZone})? lastCreate;
+  String? createdIn;
+
+  /// getEvent returns null this many times before finding the event, like
+  /// an Android calendar that is slow to return a new event.
+  int slowReads = 0;
 
   @override
   Future<Event?> getEvent(String id) async {
     calls.add('get');
+    if (slowReads > 0) {
+      slowReads--;
+      return null;
+    }
     return events[id];
   }
 
@@ -223,6 +233,36 @@ void main() {
 
   group('events', () {
     final event = SessionCalendarEvent.fromSession(_session(), now: _now)!;
+    setUp(() => DeviceCalendarGateway.readBackDelay = Duration.zero);
+
+    test('goes into the primary writable calendar', () async {
+      plugin.calendars = const [
+        Calendar(id: 'h', name: 'Holidays', readOnly: true, isPrimary: true),
+        Calendar(id: 'w', name: 'Work', readOnly: false),
+        Calendar(id: 'p', name: 'Personal', readOnly: false, isPrimary: true),
+      ];
+      expect(await gateway.requestAccess(), CalendarAccess.granted);
+      await gateway.create(event);
+      expect(plugin.createdIn, 'p');
+    });
+
+    test('no primary writable calendar: the first writable one', () {
+      expect(
+        DeviceCalendarGateway.pickCalendar(const [
+          Calendar(id: 'h', name: 'Holidays', readOnly: true, isPrimary: true),
+          Calendar(id: 'w', name: 'Work', readOnly: false),
+        ])?.id,
+        'w',
+      );
+    });
+
+    test('a calendar slow to return the new event still counts as saved, '
+        'without a second event', () async {
+      plugin.slowReads = 2;
+      final created = await gateway.create(event);
+      expect(created.eventId, 'evt-1');
+      expect(plugin.calls.where((c) => c == 'create'), hasLength(1));
+    });
 
     test(
       'created with neutral text and the exact instant, no time zone',

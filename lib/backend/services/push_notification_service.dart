@@ -126,7 +126,7 @@ class PushNotificationService {
     if (kind == 'appeal') {
       // Admin: AdminShell opens its Appeals tab (now if it's showing, or as
       // soon as it loads).
-      pendingAdminTab.value = 4;
+      pendingAdminTab.value = 2; // AdminShell.appealsTab
       return;
     }
 
@@ -142,8 +142,12 @@ class PushNotificationService {
       return;
     }
 
-    // Chat, request, match, article-reply and support_session taps are opened
-    // by AppShell, which owns those screens.
+    // A tapped ringing call needs nothing more: opening the app is enough, and
+    // VoiceCallHost shows the call as soon as it syncs (within a second).
+    if (kind == 'voice_call') return;
+
+    // Chat, request, match, article-reply, support_session and missed-call taps
+    // are opened by AppShell, which owns those screens.
     pendingOpen.value = {
       'id': message.data['id'],
       'kind': kind,

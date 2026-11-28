@@ -494,6 +494,40 @@ class SupabaseService {
     }
     final values = {'name': trimmed, 'is_active': active};
 
+    // Same name (ignoring capitals and spaces) already listed: say so plainly.
+    String duplicate(String existing) =>
+        'A condition named "$existing" already exists. '
+        'Use the existing condition or choose a different name.';
+    final existing = List<Map<String, dynamic>>.from(
+      await client.from('chronic_conditions').select('id,name'),
+    ).where(
+      (c) =>
+          c['id'] != id &&
+          (c['name'] ?? '').toString().trim().toLowerCase() ==
+              trimmed.toLowerCase(),
+    );
+    if (existing.isNotEmpty) {
+      throw ArgumentError(duplicate(existing.first['name'].toString()));
+    }
+
+    try {
+      await _writeCondition(id, values);
+    } on PostgrestException catch (error) {
+      // The database's unique name rule (409 conflict / 23505), e.g. when
+      // another admin added the same name a moment ago.
+      if (error.code == '23505' ||
+          error.code == '409' ||
+          error.message.toLowerCase().contains('duplicate key')) {
+        throw ArgumentError(duplicate(trimmed));
+      }
+      rethrow;
+    }
+  }
+
+  static Future<void> _writeCondition(
+    String? id,
+    Map<String, Object> values,
+  ) async {
     if (id == null) {
       final saved = await client
           .from('chronic_conditions')

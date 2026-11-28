@@ -473,7 +473,8 @@ void main() {
           find.text('Search by name, email or username...'),
           findsOneWidget,
         );
-        // The bottom navigation highlights Accounts, as when its tab is tapped.
+        // Accounts is no longer a nav tab: it opens on top of Overview,
+        // which stays selected, and Back returns to the overview.
         // MaakNavBar marks the selected label w600 and the others w500.
         Text navLabel(String label) => tester.widget<Text>(
           find.descendant(
@@ -481,8 +482,11 @@ void main() {
             matching: find.text(label),
           ),
         );
-        expect(navLabel('Accounts').style?.fontWeight, FontWeight.w600);
-        expect(navLabel('Overview').style?.fontWeight, FontWeight.w500);
+        expect(navLabel('Overview').style?.fontWeight, FontWeight.w600);
+        expect(find.byType(BackButton), findsOneWidget);
+        await tester.tap(find.byType(BackButton));
+        await settle(tester);
+        expect(find.text('Manage accounts'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -686,14 +690,24 @@ void main() {
   });
 
   group('Accounts list', () {
+    // Status, type and online filters live in the Filter & sort menu.
+    Future<void> openFilters(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('account_filter_menu')));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('shows accounts, statuses and a two-line reason preview', (
       tester,
     ) async {
       store.blocks[volunteerId]!['reason'] = 'Long reason. ' * 30;
       await pumpAt(tester, const AccountsAdminPage(), phone);
+      await openFilters(tester);
       expect(find.text('All (3)'), findsOneWidget);
       expect(find.text('Active (2)'), findsOneWidget);
       expect(find.text('Blocked (1)'), findsOneWidget);
+      expect(find.text('Help seekers (2)'), findsOneWidget);
+      expect(find.text('Volunteers (1)'), findsOneWidget);
+      await openFilters(tester); // closes it again
       final preview = tester.widget<Text>(
         find.textContaining('Blocked 18 Oct 2026: Long reason.'),
       );
@@ -705,6 +719,7 @@ void main() {
     testWidgets('search works within All, Active and Blocked', (tester) async {
       await pumpAt(tester, const AccountsAdminPage(), phone);
       Future<void> filter(String label) async {
+        await openFilters(tester);
         await tester.tap(find.text(label));
         await tester.pumpAndSettle();
       }
@@ -747,9 +762,34 @@ void main() {
       }
     });
 
+    testWidgets('Filter & sort: sorting by name and clearing filters', (
+      tester,
+    ) async {
+      await pumpAt(tester, const AccountsAdminPage(), tallPhone);
+      await openFilters(tester);
+      await tester.tap(find.text('Name (A–Z)'));
+      await tester.pumpAndSettle();
+      final huda = tester.getTopLeft(find.text('Huda Ali')).dy;
+      final layla = tester.getTopLeft(find.text('Layla Haddad')).dy;
+      final omar = tester.getTopLeft(find.text('Omar Saleh')).dy;
+      expect(huda, lessThan(layla));
+      expect(layla, lessThan(omar));
+      await openFilters(tester);
+      await tester.tap(find.text('Volunteers (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Showing 1 of 3 accounts'), findsOneWidget);
+      expect(find.text('Huda Ali'), findsNothing);
+      await tester.tap(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      expect(find.text('Huda Ali'), findsOneWidget);
+      expect(find.textContaining('Showing'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('empty Blocked filter explains itself', (tester) async {
       store.blocks.clear();
       await pumpAt(tester, const AccountsAdminPage(), phone);
+      await openFilters(tester);
       await tester.tap(find.text('Blocked (0)'));
       await tester.pumpAndSettle();
       expect(find.text('No blocked accounts'), findsOneWidget);
@@ -789,6 +829,7 @@ void main() {
         smallPhone,
         textScale: 1.5,
       );
+      await openFilters(tester);
       expect(find.text('Blocked (1)'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -830,16 +871,23 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('admin shell keeps existing tabs and adds Accounts', (
+    testWidgets('admin nav bar has no Conditions or Accounts tabs', (
       tester,
     ) async {
       await pumpAt(tester, const AdminShell(), phone);
-      for (final label in ['Overview', 'Applications', 'Conditions']) {
-        expect(find.text(label), findsWidgets);
+      Finder inNav(String label) => find.descendant(
+        of: find.byType(MaakNavBar),
+        matching: find.text(label),
+      );
+      for (final label in ['Overview', 'Applications', 'Appeals', 'Analytics']) {
+        expect(inNav(label), findsOneWidget);
       }
-      await tester.tap(find.text('Accounts'));
+      expect(inNav('Conditions'), findsNothing);
+      expect(inNav('Accounts'), findsNothing);
+      // Both pages still open from the Overview cards.
+      await tester.tap(find.text('Chronic conditions'));
       await settle(tester);
-      expect(find.text('Search by name, email or username...'), findsOneWidget);
+      expect(find.byType(ConditionsAdminPage), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -928,6 +976,8 @@ void main() {
 
         await tester.pageBack();
         await settle(tester);
+        await tester.tap(find.byKey(const ValueKey('account_filter_menu')));
+        await tester.pumpAndSettle();
         expect(find.text('Active (1)'), findsOneWidget);
         expect(find.text('Blocked (2)'), findsOneWidget);
         await tester.pump(const Duration(seconds: 5));
@@ -968,6 +1018,7 @@ void main() {
 
       await tester.pageBack();
       await settle(tester);
+      await openFilters(tester);
       expect(find.text('Active (3)'), findsOneWidget);
       expect(find.text('Blocked (0)'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));

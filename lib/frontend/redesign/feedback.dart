@@ -39,7 +39,8 @@ String friendlyError(Object error) {
     if (error.message.contains('message_unavailable')) {
       return 'This message is no longer available. Refresh the conversation.';
     }
-    if (error.code == '23505') {
+    // 23505 = unique rule broken; PostgREST can report the same as HTTP 409.
+    if (error.code == '23505' || error.code == '409') {
       return 'This record already exists. For conditions, choose the existing name or link the request to it.';
     }
     if (error.code == '42501') {
@@ -199,7 +200,7 @@ const _moderationMessages = {
       'This conversation has already changed. Refresh and try again.',
   // Lift restriction (20261107110000_admin_lift_restriction.sql).
   'conversation_not_restricted':
-      'This restriction has already been lifted. Refresh to see the latest status.',
+      'These participants can already chat again. Refresh to see the latest status.',
   'invalid_lift_reason': 'Enter a reason of at most 500 characters.',
   // Appeal cooldown (20261107120000_appeal_cooldown.sql).
   'appeal_cooldown':

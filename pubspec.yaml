@@ -42,6 +42,8 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/botanical_background.png
+    # Played while an incoming voice call rings with the app open.
+    - assets/sounds/ringtone.wav
   fonts:
     - family: MaakSerif
       fonts:

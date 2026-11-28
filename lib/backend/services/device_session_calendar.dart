@@ -28,6 +28,22 @@ class DeviceCalendarGateway implements CalendarGateway {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
+  /// The calendar new events go into, chosen by [requestAccess]: the primary
+  /// writable calendar, otherwise the first writable one. Passed explicitly
+  /// so events never land in a hidden or read-only default calendar.
+  String? _target;
+
+  /// Primary writable calendar first, then any writable one.
+  static Calendar? pickCalendar(List<Calendar> calendars) {
+    final writable = calendars.where((c) => !c.readOnly).toList();
+    if (writable.isEmpty) return null;
+    return writable.firstWhere(
+      // `== true` works whether the plugin types isPrimary as bool or bool?.
+      (c) => c.isPrimary == true,
+      orElse: () => writable.first,
+    );
+  }
+
   @override
   Future<CalendarAccess> requestAccess() async {
     var status = await _plugin.hasPermissions();
@@ -39,8 +55,9 @@ class DeviceCalendarGateway implements CalendarGateway {
     switch (status) {
       case CalendarPermissionStatus.granted:
         // A phone with no calendar account cannot store events.
-        final calendars = await _plugin.listCalendars();
-        return calendars.any((c) => !c.readOnly)
+        final target = pickCalendar(await _plugin.listCalendars());
+        _target = target?.id;
+        return target != null
             ? CalendarAccess.granted
             : CalendarAccess.unavailable;
       case CalendarPermissionStatus.restricted:
@@ -55,18 +72,39 @@ class DeviceCalendarGateway implements CalendarGateway {
   @override
   Future<CreatedCalendarEvent> create(SessionCalendarEvent event) async {
     final id = await _plugin.createEvent(
+      calendarId: _target,
       title: SessionCalendarEvent.title,
       // Exact instants; the calendar shows them in the device's time zone.
       startDate: event.startUtc,
       endDate: event.endUtc,
       description: SessionCalendarEvent.notes,
     );
-    // Read it back: "added" is reported only for an event that exists.
-    final saved = await _plugin.getEvent(id);
-    if (saved == null) {
-      throw StateError('The calendar did not keep the new event.');
+    // Read it back: "added" is reported only for an event that exists. Some
+    // Android calendars take a moment to return a new event, so a missing
+    // event is checked again briefly before the save counts as failed (a
+    // failure on the first read made members tap again, adding duplicates).
+    for (var attempt = 0; attempt < readBackAttempts; attempt++) {
+      if (attempt > 0) await Future<void>.delayed(readBackDelay);
+      final saved = await _find(id);
+      if (saved != null) {
+        return CreatedCalendarEvent(id, calendarId: saved.calendarId);
+      }
     }
-    return CreatedCalendarEvent(id, calendarId: saved.calendarId);
+    throw StateError('The calendar did not keep the new event.');
+  }
+
+  /// Read-back checks after creating an event, and the wait between them.
+  static const readBackAttempts = 4;
+  @visibleForTesting
+  static Duration readBackDelay = const Duration(milliseconds: 300);
+
+  Future<Event?> _find(String id) async {
+    try {
+      return await _plugin.getEvent(id);
+    } on DeviceCalendarException catch (e) {
+      if (e.errorCode == DeviceCalendarError.notFound) return null;
+      rethrow;
+    }
   }
 
   @override

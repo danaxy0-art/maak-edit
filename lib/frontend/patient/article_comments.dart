@@ -132,7 +132,7 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
         title: const Text('Delete comment?'),
         content: Text(
           hasReplies
-              ? 'Your comment will show as "This comment was deleted". The replies to it will stay. This cannot be undone.'
+              ? 'Your comment will show as "This message was deleted by the user." The replies to it will stay. This cannot be undone.'
               : 'This comment will be removed. This cannot be undone.',
         ),
         actions: [
@@ -401,10 +401,24 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
       );
 
   Widget _comment(Map<String, dynamic> c) {
-    if (c['is_deleted'] == true) return _deletedComment();
     final id = c['id'] as String;
-    final name = (c['author_name'] ?? 'A member').toString();
-    final role = switch (c['author_role']) {
+    // Every comment uses the same layout (photo, name line, text), so a
+    // deleted comment or one from a removed account is as tall as the others:
+    //  * deleted by its author: "[deleted]" and "This message was deleted by
+    //    the user."
+    //  * author deleted their account / account deactivated: the text stays,
+    //    with "[deleted account]" / "[deactivated account]" as the name.
+    final removed = c['is_deleted'] == true;
+    final status = (c['author_status'] ?? 'active').toString();
+    final placeholder = removed || status != 'active';
+    final name = removed
+        ? '[deleted]'
+        : switch (status) {
+            'deleted' => '[deleted account]',
+            'deactivated' => '[deactivated account]',
+            _ => (c['author_name'] ?? 'A member').toString(),
+          };
+    final role = switch (placeholder ? null : c['author_role']) {
       'volunteer' => 'Volunteer',
       'help_seeker' => 'Help seeker',
       _ => null,
@@ -418,9 +432,9 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
         c['reply_to_id'] != null &&
         c['reply_to_id'] != c['parent_id'] &&
         replyToName != null;
-    final canReply = _canPost;
-    final canDelete = mine || widget.moderator;
-    final authorId = c['user_id'] as String?;
+    final canReply = _canPost && !removed;
+    final canDelete = !removed && (mine || widget.moderator);
+    final authorId = placeholder ? null : c['user_id'] as String?;
     // Tapping the photo or the name opens the author's profile.
     void openProfile() {
       if (authorId != null) {
@@ -432,6 +446,14 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (placeholder)
+            const CircleAvatar(
+              key: ValueKey('comment_placeholder_photo'),
+              radius: 17,
+              backgroundColor: MaakColors.border,
+              child: Icon(Icons.person_off_outlined, size: 16, color: MaakColors.muted),
+            )
+          else
           Semantics(
             button: true,
             label: "Open $name's profile",
@@ -458,25 +480,45 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                // One line for every comment: the name shrinks (ending in
+                // "...") when it is long, e.g. "[deactivated account]" or a
+                // long full name, so the badge and time never drop to a new
+                // line. "(you)" is never cut off.
+                Row(
+                  key: ValueKey('comment_name_line_$id'),
                   children: [
-                    InkWell(
-                      onTap: authorId == null ? null : openProfile,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Text(
-                        mine ? '$name (you)' : name,
-                        style: const TextStyle(
+                    Flexible(
+                      child: InkWell(
+                        onTap: authorId == null ? null : openProfile,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: placeholder ? MaakColors.muted : MaakColors.ink,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (mine)
+                      const Text(
+                        ' (you)',
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: MaakColors.ink,
                         ),
                       ),
-                    ),
-                    if (role != null) _RoleBadge(role),
+                    if (role != null) ...[
+                      const SizedBox(width: 8),
+                      _RoleBadge(role),
+                    ],
+                    const SizedBox(width: 8),
                     Text(
                       commentTimeAgo(c['created_at']?.toString()),
+                      maxLines: 1,
                       style: const TextStyle(fontSize: 12, color: MaakColors.muted),
                     ),
                   ],
@@ -485,14 +527,26 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
                   const SizedBox(height: 4),
                   Text(
                     'Replying to $replyToName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12, color: MaakColors.coralDeep),
                   ),
                 ],
                 const SizedBox(height: 4),
-                SelectableText(
-                  (c['body'] ?? '').toString(),
-                  style: const TextStyle(color: MaakColors.ink, height: 1.5),
-                ),
+                if (removed)
+                  const Text(
+                    'This message was deleted by the user.',
+                    style: TextStyle(
+                      color: MaakColors.muted,
+                      fontStyle: FontStyle.italic,
+                      height: 1.5,
+                    ),
+                  )
+                else
+                  SelectableText(
+                    (c['body'] ?? '').toString(),
+                    style: const TextStyle(color: MaakColors.ink, height: 1.5),
+                  ),
               ],
             ),
           ),
@@ -538,24 +592,6 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
     );
   }
 
-  /// Placeholder kept for a deleted comment that still has replies.
-  Widget _deletedComment() => const Row(
-        children: [
-          CircleAvatar(
-            radius: 17,
-            backgroundColor: MaakColors.border,
-            child: Icon(Icons.chat_bubble_outline, size: 16, color: MaakColors.muted),
-          ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'This comment was deleted',
-              style: TextStyle(color: MaakColors.muted, fontStyle: FontStyle.italic),
-            ),
-          ),
-        ],
-      );
-
   Widget _notice(IconData icon, String title, String message, {Widget? action}) =>
       Padding(
         padding: widget.contentPadding.add(const EdgeInsets.symmetric(vertical: 22)),
@@ -580,18 +616,19 @@ class _ArticleCommentsSectionState extends State<ArticleCommentsSection> {
       );
 }
 
-/// "Just now", "5 min ago", "3 h ago", "2 days ago", or a date after a week.
+/// "Just now", "5 min", "3 h", "2 days", "1 week", "3 weeks". No "ago",
+/// so the label stays short next to long names.
 String commentTimeAgo(String? value) {
   final parsed = value == null ? null : DateTime.tryParse(value);
   if (parsed == null) return '';
   final local = parsed.toLocal();
   final d = DateTime.now().difference(local);
   if (d.inMinutes < 1) return 'Just now';
-  if (d.inHours < 1) return '${d.inMinutes} min ago';
-  if (d.inDays < 1) return '${d.inHours} h ago';
-  if (d.inDays < 7) return d.inDays == 1 ? '1 day ago' : '${d.inDays} days ago';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return '${local.day} ${months[local.month - 1]} ${local.year}';
+  if (d.inHours < 1) return '${d.inMinutes} min';
+  if (d.inDays < 1) return '${d.inHours} h';
+  if (d.inDays < 7) return d.inDays == 1 ? '1 day' : '${d.inDays} days';
+  final weeks = d.inDays ~/ 7;
+  return weeks == 1 ? '1 week' : '$weeks weeks';
 }
 
 /// Compact role label next to a commenter's name, in the app's role colours

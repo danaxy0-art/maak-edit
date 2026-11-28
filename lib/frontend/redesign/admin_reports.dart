@@ -455,7 +455,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
         _notice = null;
         showSuccess(
           context,
-          'Restriction lifted. Both participants were notified.',
+          'They can chat again. Both participants were notified.',
         );
       }
       await _refresh();
@@ -951,7 +951,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
                   ? null
                   : () => _liftRestriction(conversation),
               icon: const Icon(Icons.lock_open_outlined),
-              label: const Text('Lift restriction'),
+              label: const Text('Let them chat again'),
             ),
           ],
         ],
@@ -978,7 +978,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
                       ? '$name (you)'
                       : name;
                   return e['action'] == 'lifted'
-                      ? 'Restriction lifted by $who'
+                      ? 'Chat allowed again by $who'
                       : 'Conversation restricted by $who';
                 }(),
                 date: e['created_at'] as String?,
@@ -1297,13 +1297,15 @@ class _LiftRestrictionDialogState extends State<LiftRestrictionDialog> {
 
   @override
   Widget build(BuildContext context) => _ModerationDialog(
-    title: 'Lift this restriction?',
+    title: 'Let them chat again?',
     message:
-        'They can chat again unless a participant ended the chat or an account is blocked. Both get a notice without your reason.',
+        'This ends the restriction on this conversation, so both participants can message each other again. '
+        'It stays closed if a participant ended the chat or an account is blocked. '
+        'Both get a notice; your reason is not shown to them.',
     name: widget.participants,
     email: 'Conversation participants',
-    confirm: 'Lift restriction',
-    busyConfirm: 'Lifting...',
+    confirm: 'Allow chat',
+    busyConfirm: 'Allowing...',
     busy: _busy,
     destructive: false,
     form: _form,

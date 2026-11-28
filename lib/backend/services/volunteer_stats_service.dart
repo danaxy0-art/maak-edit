@@ -237,6 +237,41 @@ class VolunteerStatsService {
   }
 
   /// The signed-in volunteer's badge progress; null for other members.
+  /// Thresholds used when volunteer_badge_levels can't be read (the
+  /// provisionally approved values in 20261126110000_volunteer_badges.sql).
+  static const defaultBadgeThresholds = {
+    BadgeLevel.beginner: 1,
+    BadgeLevel.intermediate: 5,
+    BadgeLevel.expert: 15,
+  };
+
+  static Future<Map<BadgeLevel, int>>? _thresholds;
+
+  /// Help seekers needed for each badge, from volunteer_badge_levels (which
+  /// administrators can change). Read once per app run.
+  static Future<Map<BadgeLevel, int>> badgeThresholds() =>
+      _thresholds ??= _loadThresholds();
+
+  static Future<Map<BadgeLevel, int>> _loadThresholds() async {
+    try {
+      final rows = await SupabaseService.client
+          .from('volunteer_badge_levels')
+          .select('level,min_supported')
+          .order('rank');
+      final result = <BadgeLevel, int>{};
+      for (final row in rows) {
+        final level = BadgeLevel.parse(row['level']);
+        final min = (row['min_supported'] as num?)?.toInt();
+        if (level != null && min != null) result[level] = min;
+      }
+      if (result.length == BadgeLevel.values.length) return result;
+    } catch (error) {
+      debugPrint('Badge thresholds unavailable: ${error.runtimeType}');
+    }
+    // Kept for this app run, so badges on screen don't each retry.
+    return defaultBadgeThresholds;
+  }
+
   static Future<BadgeProgress?> myBadgeProgress() async =>
       BadgeProgress.fromJson(
         await SupabaseService.client.rpc('my_maak_badge_progress'),
@@ -266,6 +301,7 @@ class VolunteerStatsService {
   @visibleForTesting
   static void resetCache() {
     _cache.clear();
+    _thresholds = null;
     _waiting.clear();
     _flushScheduled = false;
     _cacheOwner = null;
