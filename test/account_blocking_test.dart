@@ -152,6 +152,12 @@ class _ModerationStore {
   }
 }
 
+// Status, type and online filters live in the Filter & sort menu.
+Future<void> openFilters(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('account_filter_menu')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   // Recorded calls (RPC or table name) and their JSON bodies, in order.
@@ -690,12 +696,6 @@ void main() {
   });
 
   group('Accounts list', () {
-    // Status, type and online filters live in the Filter & sort menu.
-    Future<void> openFilters(WidgetTester tester) async {
-      await tester.tap(find.byKey(const ValueKey('account_filter_menu')));
-      await tester.pumpAndSettle();
-    }
-
     testWidgets('shows accounts, statuses and a two-line reason preview', (
       tester,
     ) async {
