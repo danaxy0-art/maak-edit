@@ -16,6 +16,7 @@ import 'notifications.dart';
 import 'navigation.dart';
 import 'support.dart';
 import 'feedback.dart';
+import 'personal_reminders.dart';
 
 class HomePage extends StatefulWidget {
   final String role;
@@ -248,6 +249,18 @@ class _HomePageState extends State<HomePage> {
       onTap: () => _push(SessionsPage(role: widget.role)),
     ),
     // === END ADDED BY RAZAN ===
+
+    // === Personal Health Planner ===
+    if (widget.role == 'help_seeker')
+      ActionRow(
+        icon: Icons.calendar_month_outlined,
+        title: 'My health planner',
+        subtitle: 'Personal appointments and reminders',
+        stacked: stacked,
+        onTap: () => _push(const PersonalRemindersPage()),
+      ),
+    // === End Personal Health Planner ===
+
     ActionRow(
       icon: Icons.menu_book_outlined,
       title: 'Health Library',

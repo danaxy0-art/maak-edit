@@ -96,12 +96,17 @@ void main() {
   });
 
   group('chat alerts clearing notifications', () {
-    test('clears chat alerts and pushes, keeps session reminders, and never '
-        'touches scheduled ones', () async {
+    test('clears chat alerts and pushes, keeps session and personal '
+        'reminders, and never touches scheduled ones', () async {
       active = [
         {'id': 11, 'channelId': 'maak_alerts', 'tag': null},
         {'id': 0, 'channelId': 'maak_calls', 'tag': 'call-r1'},
         {'id': 12, 'channelId': SessionReminders.channelId, 'tag': null},
+        {
+          'id': -5,
+          'channelId': 'maak_personal_reminders',
+          'payload': 'personal_reminder:r1',
+        },
       ];
       await ChatAlertService.clearShownForTesting();
       final cancels = calls.where((c) => c.method == 'cancel').toList();
@@ -110,13 +115,12 @@ void main() {
       expect(calls.map((c) => c.method), isNot(contains('cancelAll')));
     });
 
-    test(
-      'if the shown list cannot be read, everything is cleared as before',
-      () async {
-        active = PlatformException(code: 'unavailable');
-        await ChatAlertService.clearShownForTesting();
-        expect(calls.map((c) => c.method), contains('cancelAll'));
-      },
-    );
+    test('if the shown list cannot be read, only known chat alerts are '
+        'cleared (reminders stay)', () async {
+      active = PlatformException(code: 'unavailable');
+      await ChatAlertService.clearShownForTesting(['chat-1', 'chat-2']);
+      expect(calls.map((c) => c.method), isNot(contains('cancelAll')));
+      expect(calls.where((c) => c.method == 'cancel'), hasLength(2));
+    });
   });
 }

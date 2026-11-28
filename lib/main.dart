@@ -9,6 +9,8 @@ import 'backend/services/device_session_reminders.dart';
 import 'backend/services/push_notification_service.dart';
 import 'backend/services/supabase_service.dart';
 import 'backend/services/realtime_presence_service.dart';
+import 'backend/services/personal_reminder_notification_service.dart';
+import 'backend/services/personal_reminder_sync_service.dart';
 import 'firebase_options.dart';
 import 'frontend/calls/voice_calls.dart';
 import 'frontend/auth/auth_gate.dart';
@@ -34,10 +36,17 @@ Future<void> main() async {
 
   // After runApp so the permission prompt doesn't delay the first frame.
   PushNotificationService.init();
+
   // New chat message alerts: Supabase Realtime + local notifications (no FCM).
+  await ChatAlertService.init();
+
   // Sprint 4 US6: reminders before confirmed sessions, scheduled on the phone.
   // Started after the chat alerts, which initialise the notification plugin.
-  ChatAlertService.init().whenComplete(AppSessionReminders.init);
+  AppSessionReminders.init();
+
+  PersonalReminderNotificationService.initialize();
+  PersonalReminderSyncService.initialize();
+
   // Sends a member to the restricted screen as soon as an admin blocks them.
   AccountStatusWatcher.start();
 

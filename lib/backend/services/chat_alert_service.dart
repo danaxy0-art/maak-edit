@@ -31,6 +31,8 @@ class ChatAlertService {
   ChatAlertService._();
 
   static final _plugin = FlutterLocalNotificationsPlugin();
+  static FlutterLocalNotificationsPlugin get notificationPlugin => _plugin;
+
   static const _channelId = 'maak_alerts'; // created in MainActivity
   static const _channelName = "Ma'ak notifications";
 
@@ -156,6 +158,7 @@ class ChatAlertService {
   }
 
   static Future<void> _stop() async {
+    final chatIds = _lines.keys.toList();
     final channel = _channel;
     _channel = null;
     _userId = null;
@@ -169,31 +172,40 @@ class ChatAlertService {
       } catch (_) {}
     }
     // Nobody else's messages stay on this phone after sign-out.
-    if (_initialized) await _clearShown();
+    if (_initialized) await _clearShown(chatIds);
   }
 
-  /// Removes every notification on screen except session reminders (Sprint 4
-  /// US6). cancelAll() would also delete the reminders scheduled for later,
-  /// and this runs at every start and sign-in, not only at sign-out;
-  /// SessionReminders cancels its own on sign-out. If the list cannot be
-  /// read, everything is cleared as before.
+  /// Removes the notifications on screen except reminders: session reminders
+  /// (Sprint 4 US6) and personal health reminders, which keep their own
+  /// schedules and are canceled by their own services on sign-out.
+  /// cancelAll() would also delete reminders scheduled for later, and this
+  /// runs at every start and sign-in, not only at sign-out. If the list
+  /// cannot be read, only this service's chat alerts ([chatIds]) are
+  /// cleared.
   @visibleForTesting
-  static Future<void> clearShownForTesting() => _clearShown();
+  static Future<void> clearShownForTesting([List<String> chatIds = const []]) =>
+      _clearShown(chatIds);
 
   @visibleForTesting
   static void onTapForTesting(NotificationResponse response) =>
       _onTap(response);
 
-  static Future<void> _clearShown() async {
+  static Future<void> _clearShown(List<String> chatIds) async {
     try {
       for (final n in await _plugin.getActiveNotifications()) {
         final id = n.id;
-        if (id == null || n.channelId == SessionReminders.channelId) continue;
+        if (id == null ||
+            n.channelId == SessionReminders.channelId ||
+            n.payload?.startsWith('personal_reminder:') == true) {
+          continue;
+        }
         await _plugin.cancel(id: id, tag: n.tag);
       }
     } catch (_) {
       try {
-        await _plugin.cancelAll();
+        for (final requestId in chatIds) {
+          await _plugin.cancel(id: _notificationId(requestId));
+        }
       } catch (_) {}
     }
   }
@@ -326,6 +338,10 @@ class ChatAlertService {
   }
 
   static void _onTap(NotificationResponse response) {
+    if (response.payload?.startsWith('personal_reminder:') == true) {
+      return;
+    }
+
     final requestId = response.payload;
     if (requestId == null || requestId.isEmpty) return;
     // Sprint 4 US6: a session reminder opens Sessions, not a conversation.
