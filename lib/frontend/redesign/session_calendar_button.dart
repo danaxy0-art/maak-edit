@@ -34,27 +34,45 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
   SessionCalendarState _state = SessionCalendarState.hidden;
   bool _busy = false;
 
+  // Each check gets a number; only the latest one may change the label, so
+  // a slow earlier check can't overwrite a newer result.
+  int _check = 0;
+
   @override
   void initState() {
     super.initState();
+    _state = _initialState();
     _refresh();
   }
+
+  /// Shown at once for an eligible session ("Add to calendar"), instead of
+  /// staying hidden until the device calendar has been checked, which can
+  /// take a few seconds. The check then corrects the label if needed.
+  SessionCalendarState _initialState() =>
+      _calendar.gateway.isSupported &&
+          SessionCalendarEvent.fromSession(widget.session) != null
+      ? SessionCalendarState.notAdded
+      : SessionCalendarState.hidden;
 
   @override
   void didUpdateWidget(SessionCalendarButton old) {
     super.didUpdateWidget(old);
     // The list reloaded (for example after a reschedule): label again.
-    if (old.session['slot_id'] != widget.session['slot_id'] ||
+    if (old.session['id'] != widget.session['id'] ||
+        old.session['slot_id'] != widget.session['slot_id'] ||
         old.session['starts_at'] != widget.session['starts_at'] ||
-        old.session['status'] != widget.session['status']) {
+        old.session['status'] != widget.session['status'] ||
+        old.session['display_status'] != widget.session['display_status']) {
+      if (old.session['id'] != widget.session['id']) _state = _initialState();
       _refresh();
     }
   }
 
   Future<void> _refresh() async {
     if (!_calendar.gateway.isSupported) return; // web / desktop: never shown
+    final check = ++_check;
     final state = await _calendar.stateOf(widget.session);
-    if (mounted) setState(() => _state = state);
+    if (mounted && check == _check) setState(() => _state = state);
   }
 
   Future<void> _tap() async {

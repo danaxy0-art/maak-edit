@@ -1,5 +1,6 @@
 import '../../backend/services/push_notification_service.dart';
 import '../../backend/services/supabase_service.dart';
+import '../../backend/services/time_zone_sync.dart';
 import 'ui.dart';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'profile.dart';
 import 'support.dart';
 import 'matching_page.dart';
 import '../patient/health_library_page.dart' show ArticleDetailsPage;
+import 'sessions.dart' show SessionsPage;
 import 'in_app_banner.dart'; // ADDED: pop-up banner for new notifications
 
 class AppShell extends StatefulWidget {
@@ -24,7 +26,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
   int _index = 0;
   late final _unread = SupabaseService.unreadMessageCount();
@@ -33,14 +35,24 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    // Session notification times use this device's time zone.
+    WidgetsBinding.instance.addObserver(this);
+    TimeZoneSync.sync();
     PushNotificationService.pendingOpen.addListener(_openPendingPush);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingPush());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     PushNotificationService.pendingOpen.removeListener(_openPendingPush);
     super.dispose();
+  }
+
+  // The device may have changed time zone (travel, daylight saving).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) TimeZoneSync.sync();
   }
 
   void _openPendingPush() {
@@ -76,7 +88,9 @@ class _AppShellState extends State<AppShell> {
     if ((n['kind'] == 'message' ||
             n['kind'] == 'chat_reopen' ||
             n['kind'] == 'restricted' ||
-            n['kind'] == 'restriction_lifted') &&
+            n['kind'] == 'restriction_lifted' ||
+            // Missed voice call: open the chat so they can call back.
+            n['kind'] == 'voice_call_missed') &&
         n['reference_id'] != null) {
       ConversationPage.open(
         context,
@@ -100,6 +114,11 @@ class _AppShellState extends State<AppShell> {
             scrollToComments: true,
           ),
         ),
+      );
+    } else if (n['kind'] == 'support_session') {
+      // Session request / confirmation / cancellation / reschedule.
+      nav.push(
+        MaterialPageRoute(builder: (_) => SessionsPage(role: widget.role)),
       );
     } else if (n['kind'] == 'match' && widget.role == 'help_seeker') {
       nav.push(MaterialPageRoute(builder: (_) => const MatchingPage()));

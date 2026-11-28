@@ -7,6 +7,8 @@
 //   * Help Seeker or Volunteer reschedules or cancels ........ SessionsPage
 // Data comes from supabase/migrations/20261121100000_session_scheduling.sql
 // through the "ADDED BY RAZAN" methods in supabase_service.dart.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../backend/services/supabase_service.dart';
@@ -92,13 +94,53 @@ class _LoadList extends StatefulWidget {
   State<_LoadList> createState() => _LoadListState();
 }
 
-class _LoadListState extends State<_LoadList> {
+class _LoadListState extends State<_LoadList> with WidgetsBindingObserver {
   late Future<List<Map<String, dynamic>>> _future;
+
+  // The other person's changes (a session accepted, rescheduled or canceled)
+  // appear without pulling to refresh: every 30 seconds while the page is
+  // open, and when the app comes back to the foreground. Before this, an
+  // accepted session showed "Add to calendar" only after a manual refresh.
+  Timer? _timer;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
     _future = widget.load();
+    WidgetsBinding.instance.addObserver(this);
+    _timer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _quietRefresh(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _quietRefresh();
+  }
+
+  /// Reloads in the background: the list stays on screen (no spinner), and
+  /// a failed refresh keeps what is shown; the next one tries again.
+  Future<void> _quietRefresh() async {
+    if (_refreshing || !mounted) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    _refreshing = true;
+    try {
+      final rows = await widget.load();
+      if (mounted) setState(() => _future = Future.value(rows));
+    } catch (_) {
+      // Keep the current list.
+    } finally {
+      _refreshing = false;
+    }
   }
 
   void _reload() {
@@ -140,6 +182,11 @@ class _LoadListState extends State<_LoadList> {
                   EmptyState(widget.emptyTitle, widget.emptyText),
                 for (final row in rows)
                   Padding(
+                    // Keyed by row id so each card keeps its own state (busy
+                    // buttons, calendar label) when the list reloads.
+                    key: row['id'] == null
+                        ? null
+                        : ValueKey('load_list_${row['id']}'),
                     padding: const EdgeInsets.only(bottom: 14),
                     child: widget.item(context, row, _reload),
                   ),
@@ -276,11 +323,17 @@ Future<bool> _confirm(
 class AvailabilityPage extends StatelessWidget {
   const AvailabilityPage({super.key});
 
-  Future<void> _add(BuildContext context, VoidCallback reload) async {
+  // ADDED BY RAZAN: static so the Sessions page can start the same steps from its + button.
+  static Future<void> _add(BuildContext context, VoidCallback reload) async {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
       helpText: 'Choose the day',
+      // ADDED BY RAZAN: day / month / year order, with the format shown to the member.
+      locale: const Locale('en', 'GB'),
+      fieldLabelText: 'Date (day/month/year)',
+      fieldHintText: 'DD/MM/YYYY',
+      errorFormatText: 'Write the date as DD/MM/YYYY',
       initialDate: now.add(const Duration(days: 1)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 90)),
@@ -554,14 +607,24 @@ class SessionsPage extends StatelessWidget {
     header: (_) => _volunteer
         ? Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: ActionRow(
-              icon: Icons.event_available_outlined,
-              title: 'My available times',
-              subtitle: 'Set when you can support someone',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AvailabilityPage()),
-              ),
+            // ADDED BY RAZAN: one tap on + starts adding a time slot.
+            child: Column(
+              children: [
+                PillButton(
+                  'Add a time slot',
+                  icon: Icons.add,
+                  expand: true,
+                  onPressed: () => AvailabilityPage._add(context, () {}),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.event_available_outlined),
+                  label: const Text('My available times'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AvailabilityPage()),
+                  ),
+                ),
+              ],
             ),
           )
         : const SizedBox.shrink(),

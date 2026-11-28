@@ -150,7 +150,7 @@ String? validateEndConversationReason(String? value) =>
 
 /// Same rule as admin_lift_conversation_restriction(): 1-500 after trimming.
 String? validateLiftReason(String? value) =>
-    _reportDecision(value, 'Explain why the restriction is lifted');
+    _reportDecision(value, 'Explain why they can chat again');
 
 String? _reportDecision(String? value, String empty) {
   final v = value?.trim() ?? '';

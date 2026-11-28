@@ -7,6 +7,7 @@ import 'feedback.dart';
 import 'support.dart';
 import 'matching_page.dart';
 import '../patient/health_library_page.dart' show ArticleDetailsPage;
+import 'sessions.dart' show SessionsPage;
 
 class NotificationBell extends StatefulWidget {
   const NotificationBell({super.key});
@@ -82,7 +83,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if ((n['kind'] == 'message' ||
               n['kind'] == 'chat_reopen' ||
               n['kind'] == 'restricted' ||
-              n['kind'] == 'restriction_lifted') &&
+              n['kind'] == 'restriction_lifted' ||
+              // Missed voice call: open the chat so they can call back.
+              n['kind'] == 'voice_call_missed') &&
           n['reference_id'] != null) {
         ConversationPage.open(
           context,
@@ -100,6 +103,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
           ),
         );
+      } else if (n['kind'] == 'support_session') {
+        // A session request, confirmation, decline, cancellation or
+        // reschedule: open Sessions, where it can be acted on.
+        final role = await SupabaseService.getMyRole();
+        if (mounted && (role == 'volunteer' || role == 'help_seeker')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => SessionsPage(role: role!)),
+          );
+        }
       } else if (n['kind'] == 'match') {
         Navigator.push(
           context,
@@ -194,6 +207,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ? Icons.flag_outlined
                   : n['kind'] == 'article_reply'
                   ? Icons.forum_outlined
+                  : n['kind'] == 'support_session'
+                  ? Icons.event_outlined
+                  : n['kind'] == 'voice_call_missed'
+                  ? Icons.phone_missed_outlined
                   : Icons.notifications_outlined,
               color: AppColors.primaryNavy,
             ),

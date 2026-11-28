@@ -8,6 +8,11 @@ enum _AccountFilter { all, active, blocked }
 
 enum _AccountType { all, helpSeeker, volunteer }
 
+enum _PresenceFilter { all, online, offline }
+
+/// Newest first is the server's order (admin_list_accounts).
+enum _AccountSort { newest, oldest, name }
+
 /// Outcome of a block/reactivate dialog: the action succeeded, or another
 /// administrator changed the account first and the page must refresh.
 typedef ModerationOutcome = ({bool stale, String? text});
@@ -55,11 +60,16 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
   String _search = '';
   _AccountFilter _filter = _AccountFilter.all;
   _AccountType _type = _AccountType.all;
+  _PresenceFilter _presence = _PresenceFilter.all;
+  _AccountSort _sort = _AccountSort.newest;
   // Rows stay visible while a refresh runs; only the first load shows a spinner.
   List<Map<String, dynamic>>? _rows;
   Object? _error;
   bool _loading = true;
   bool _opening = false;
+  final Map<String, RealtimeChannel> _presenceChannels = {};
+  final Set<String> _onlineUsers = {};
+  final Set<String> _presenceReadyUsers = {};
 
   @override
   void initState() {
@@ -69,8 +79,56 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
 
   @override
   void dispose() {
+    for (final channel in _presenceChannels.values) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    _presenceChannels.clear();
+    _onlineUsers.clear();
+    _presenceReadyUsers.clear();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToPresence() {
+    final session = Supabase.instance.client.auth.currentSession;
+    debugPrint('Admin User ID: ${session?.user.id}');
+    debugPrint('Session exists: ${session != null}');
+    debugPrint('Session expired: ${session?.isExpired}');
+    final supabase = Supabase.instance.client;
+    for (final account in _rows ?? <Map<String, dynamic>>[]) {
+      final userId = account['user_id'] as String;
+      if (_presenceChannels.containsKey(userId)) continue;
+      final channel = supabase.channel(
+        'presence:$userId',
+        opts: const RealtimeChannelConfig(private: true),
+      );
+      _presenceChannels[userId] = channel;
+      channel.onPresenceSync((payload) {
+        if (!mounted) return;
+        final online = channel.presenceState().isNotEmpty;
+        setState(() {
+          _presenceReadyUsers.add(userId);
+          if (online) {
+            _onlineUsers.add(userId);
+          } else {
+            _onlineUsers.remove(userId);
+          }
+        });
+        debugPrint('Presence $userId: $online');
+      });
+      channel.subscribe((status, error) {
+        debugPrint('Presence subscription: $status - $error');
+        if (!mounted) return;
+        if (status == RealtimeSubscribeStatus.channelError ||
+            status == RealtimeSubscribeStatus.timedOut ||
+            status == RealtimeSubscribeStatus.closed) {
+          setState(() {
+            _presenceReadyUsers.remove(userId);
+            _onlineUsers.remove(userId);
+          });
+        }
+      });
+    }
   }
 
   Future<void> _fetch() async {
@@ -81,6 +139,7 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
           _rows = data.rows;
           _error = null;
         });
+        _subscribeToPresence();
       }
     } catch (error) {
       debugPrint('Admin accounts load failed: ${error.runtimeType}');
@@ -132,6 +191,11 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
 
   bool _matches(Map<String, dynamic> row) {
     final blocked = row['is_blocked'] == true;
+    final userId = row['user_id'] as String;
+    final ready = blocked || _presenceReadyUsers.contains(userId);
+    final online = !blocked && _onlineUsers.contains(userId);
+    if (_presence == _PresenceFilter.online && (!ready || !online)) return false;
+    if (_presence == _PresenceFilter.offline && (!ready || online)) return false;
     if (_filter == _AccountFilter.active && blocked) return false;
     if (_filter == _AccountFilter.blocked && !blocked) return false;
     if (_type == _AccountType.helpSeeker && row['role'] != 'help_seeker') {
@@ -157,15 +221,25 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            child: TextField(
-              controller: _searchController,
-              maxLength: 100,
-              onChanged: (value) =>
-                  setState(() => _search = value.trim().toLowerCase()),
-              decoration: const InputDecoration(
-                hintText: 'Search by name, email or username...',
-                prefixIcon: Icon(Icons.search),
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    maxLength: 100,
+                    onChanged: (value) =>
+                        setState(() => _search = value.trim().toLowerCase()),
+                    decoration: const InputDecoration(
+                      hintText: 'Search by name, email or username...',
+                      prefixIcon: Icon(Icons.search),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _filterMenu(),
+              ],
             ),
           ),
           Expanded(child: _body()),
@@ -186,8 +260,7 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
       }
       return const Center(child: CircularProgressIndicator());
     }
-    final blockedCount = all.where((r) => r['is_blocked'] == true).length;
-    final rows = all.where(_matches).toList();
+    final rows = _sorted(all.where(_matches).toList());
     return RefreshIndicator(
       onRefresh: _reload,
       child: LayoutBuilder(
@@ -201,14 +274,15 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             children: [
-              _filters(all.length, all.length - blockedCount, blockedCount),
-              const SizedBox(height: 10),
-              _typeFilters(all),
+              if (_filtersActive) ...[
+                _activeFiltersLine(rows.length, all.length),
+                const SizedBox(height: 8),
+              ],
               if (_error != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
                 _RefreshFailedNotice(error: _error!, retry: _reload),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               if (rows.isEmpty) _emptyState(all.isEmpty),
               Wrap(
                 spacing: 14,
@@ -218,7 +292,13 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
                     SizedBox(
                       width: cardWidth,
                       child: _AccountCard(
-                        account: row,
+                        account: {
+                          ...row,
+                          'is_online': row['is_blocked'] != true &&
+                              _onlineUsers.contains(row['user_id']),
+                          'presence_ready': row['is_blocked'] == true ||
+                              _presenceReadyUsers.contains(row['user_id']),
+                        },
                         onTap: () => _open(row),
                       ),
                     ),
@@ -231,17 +311,217 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
     );
   }
 
-  // Second row, same look as the status filter: narrows by account type.
-  Widget _typeFilters(List<Map<String, dynamic>> all) {
-    int count(String role) => all.where((r) => r['role'] == role).length;
-    return _FilterBar<_AccountType>(
-      options: {
-        _AccountType.all: 'All types (${all.length})',
-        _AccountType.helpSeeker: 'Help seekers (${count('help_seeker')})',
-        _AccountType.volunteer: 'Volunteers (${count('volunteer')})',
-      },
-      selected: _type,
-      onChanged: (value) => setState(() => _type = value),
+  bool get _filtersActive =>
+      _filter != _AccountFilter.all ||
+      _type != _AccountType.all ||
+      _presence != _PresenceFilter.all ||
+      _sort != _AccountSort.newest;
+
+  void _clearFilters() => setState(() {
+    _filter = _AccountFilter.all;
+    _type = _AccountType.all;
+    _presence = _PresenceFilter.all;
+    _sort = _AccountSort.newest;
+  });
+
+  List<Map<String, dynamic>> _sorted(List<Map<String, dynamic>> rows) {
+    DateTime joined(Map<String, dynamic> r) =>
+        DateTime.tryParse('${r['created_at'] ?? ''}') ?? DateTime(0);
+    switch (_sort) {
+      case _AccountSort.newest:
+        return rows; // already newest first from the server
+      case _AccountSort.oldest:
+        return rows..sort((a, b) => joined(a).compareTo(joined(b)));
+      case _AccountSort.name:
+        return rows
+          ..sort(
+            (a, b) => _accountName(a).toLowerCase().compareTo(
+              _accountName(b).toLowerCase(),
+            ),
+          );
+    }
+  }
+
+  /// "Showing 2 of 3 accounts · Clear" when a filter or sort is on.
+  Widget _activeFiltersLine(int shown, int total) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          'Showing $shown of $total accounts',
+          style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+        ),
+      ),
+      TextButton.icon(
+        onPressed: _clearFilters,
+        icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+        label: const Text('Clear filters'),
+      ),
+    ],
+  );
+
+  static const _menuStyle = MenuStyle(
+    backgroundColor: WidgetStatePropertyAll(Colors.white),
+    surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+    maximumSize: WidgetStatePropertyAll(Size(320, 520)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+    ),
+  );
+
+  Widget _menuHeader(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textMuted,
+        letterSpacing: 0.4,
+      ),
+    ),
+  );
+
+  Widget _choice(
+    String label, {
+    required bool selected,
+    required VoidCallback onPressed,
+    IconData? icon,
+  }) => MenuItemButton(
+    leadingIcon: Icon(
+      selected ? Icons.check : (icon ?? Icons.circle_outlined),
+      size: 18,
+      color: selected ? AppColors.selectedCardBorder : AppColors.textMuted,
+    ),
+    onPressed: onPressed,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 230),
+      child: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+        ),
+      ),
+    ),
+  );
+
+  /// "Filter & sort" beside the search bar, opening as a dropdown menu with
+  /// the sort order and the status, account type and online filters. Each
+  /// option shows how many accounts it covers.
+  Widget _filterMenu() {
+    final all = _rows ?? const <Map<String, dynamic>>[];
+    final blocked = all.where((r) => r['is_blocked'] == true).length;
+    int role(String r) => all.where((a) => a['role'] == r).length;
+    final online = all.where((r) =>
+        r['is_blocked'] != true &&
+        _presenceReadyUsers.contains(r['user_id']) &&
+        _onlineUsers.contains(r['user_id'])).length;
+    final offline = all.where((r) =>
+        r['is_blocked'] == true ||
+        (_presenceReadyUsers.contains(r['user_id']) &&
+            !_onlineUsers.contains(r['user_id']))).length;
+    final active = _filtersActive;
+    return MenuAnchor(
+      style: _menuStyle,
+      alignmentOffset: const Offset(0, 6),
+      menuChildren: [
+        _menuHeader('SORT BY'),
+        _choice('Newest first', selected: _sort == _AccountSort.newest,
+            icon: Icons.schedule,
+            onPressed: () => setState(() => _sort = _AccountSort.newest)),
+        _choice('Oldest first', selected: _sort == _AccountSort.oldest,
+            icon: Icons.history,
+            onPressed: () => setState(() => _sort = _AccountSort.oldest)),
+        _choice('Name (A–Z)', selected: _sort == _AccountSort.name,
+            icon: Icons.sort_by_alpha,
+            onPressed: () => setState(() => _sort = _AccountSort.name)),
+        const Divider(height: 12),
+        _menuHeader('STATUS'),
+        _choice('All (${all.length})', selected: _filter == _AccountFilter.all,
+            onPressed: () => setState(() => _filter = _AccountFilter.all)),
+        _choice('Active (${all.length - blocked})',
+            selected: _filter == _AccountFilter.active,
+            onPressed: () => setState(() => _filter = _AccountFilter.active)),
+        _choice('Blocked ($blocked)', selected: _filter == _AccountFilter.blocked,
+            onPressed: () => setState(() => _filter = _AccountFilter.blocked)),
+        const Divider(height: 12),
+        _menuHeader('ACCOUNT TYPE'),
+        _choice('All types (${all.length})', selected: _type == _AccountType.all,
+            onPressed: () => setState(() => _type = _AccountType.all)),
+        _choice('Help seekers (${role('help_seeker')})',
+            selected: _type == _AccountType.helpSeeker,
+            onPressed: () => setState(() => _type = _AccountType.helpSeeker)),
+        _choice('Volunteers (${role('volunteer')})',
+            selected: _type == _AccountType.volunteer,
+            onPressed: () => setState(() => _type = _AccountType.volunteer)),
+        const Divider(height: 12),
+        _menuHeader('ONLINE STATUS'),
+        _choice('Online or offline (${all.length})',
+            selected: _presence == _PresenceFilter.all,
+            onPressed: () => setState(() => _presence = _PresenceFilter.all)),
+        _choice('Online ($online)', selected: _presence == _PresenceFilter.online,
+            onPressed: () => setState(() => _presence = _PresenceFilter.online)),
+        _choice('Offline ($offline)',
+            selected: _presence == _PresenceFilter.offline,
+            onPressed: () => setState(() => _presence = _PresenceFilter.offline)),
+        if (active) ...[
+          const Divider(height: 12),
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+            onPressed: _clearFilters,
+            child: const Text('Clear filters'),
+          ),
+        ],
+      ],
+      builder: (context, controller, _) => Tooltip(
+        message: active ? 'Filter & sort (active)' : 'Filter & sort',
+        child: Material(
+          key: const ValueKey('account_filter_menu'),
+          color: active ? AppColors.primaryNavy : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.fieldBorder),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: SizedBox(
+              height: 56,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune,
+                      size: 20,
+                      color: active ? Colors.white : AppColors.textDark,
+                    ),
+                    // Label hidden on narrow phones to keep the search wide.
+                    if (MediaQuery.sizeOf(context).width >= 400) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        'Filter & sort',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: active ? Colors.white : AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                    Icon(
+                      controller.isOpen
+                          ? Icons.arrow_drop_up
+                          : Icons.arrow_drop_down,
+                      color: active ? Colors.white : AppColors.textDark,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -252,7 +532,8 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
         'Registered members will appear here.',
       );
     }
-    if (_search.isNotEmpty || _type != _AccountType.all) {
+    if (_search.isNotEmpty || _type != _AccountType.all ||
+        _presence != _PresenceFilter.all) {
       return const EmptyState(
         'No matching accounts',
         'Try a different search or filter.',
@@ -269,16 +550,6 @@ class _AccountsAdminPageState extends State<AccountsAdminPage> {
           );
   }
 
-  Widget _filters(int all, int active, int blocked) =>
-      _FilterBar<_AccountFilter>(
-        options: {
-          _AccountFilter.all: 'All ($all)',
-          _AccountFilter.active: 'Active ($active)',
-          _AccountFilter.blocked: 'Blocked ($blocked)',
-        },
-        selected: _filter,
-        onChanged: (value) => setState(() => _filter = value),
-      );
 }
 
 // The one filter style for every admin list: a full-width segmented row whose
@@ -395,6 +666,10 @@ class _AccountCard extends StatelessWidget {
                   children: [
                     _AccountStatusChip(blocked: blocked),
                     RoleChip(_roleLabel(account['role'] as String?)),
+                    _PresenceChip(
+                      online: account['is_online'] == true && !blocked,
+                      ready: account['presence_ready'] == true || blocked,
+                    ),
                     if (account['pending_appeal'] != null)
                       const RoleChip('Appeal pending', pending: true),
                   ],
@@ -1282,6 +1557,32 @@ class _ReactivateAccountDialogState extends State<ReactivateAccountDialog> {
 
 bool _isStale(Object error, List<String> codes) =>
     error is PostgrestException && codes.any(error.message.contains);
+
+class _PresenceChip extends StatelessWidget {
+  final bool online;
+  final bool ready;
+  const _PresenceChip({required this.online, required this.ready});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready && online ? AppColors.success : AppColors.textMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Text(
+        !ready ? '● Checking...' : online ? '● Online' : '● Offline',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
 
 class _AccountStatusChip extends StatelessWidget {
   final bool blocked;

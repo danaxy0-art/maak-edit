@@ -501,4 +501,68 @@ void main() {
     expect(find.text('My participation badge'), findsNothing);
     expect(_calls('my_maak_badge_progress'), isEmpty);
   });
+
+  group('badge requirement messages', () {
+    String? tip(WidgetTester tester, String level) => tester
+        .widget<Tooltip>(find.byKey(ValueKey('badge_requirement_$level')))
+        .message;
+
+    testScreen('each stage shows how many help seekers it takes', (
+      tester,
+    ) async {
+      fakeBackend = backendFrom({
+        '/volunteer_badge_levels': [
+          {'level': 'beginner', 'min_supported': 1},
+          {'level': 'intermediate', 'min_supported': 4},
+          {'level': 'expert', 'min_supported': 12},
+        ],
+      });
+      await pumpScreen(
+        tester,
+        _progress(
+          () async => const BadgeProgress(
+            supported: 3,
+            badge: BadgeLevel.beginner,
+            next: BadgeLevel.intermediate,
+            nextMin: 4,
+          ),
+        ),
+      );
+      expect(
+        tip(tester, 'beginner'),
+        'Worm (Beginner badge): support your first help seeker to earn it.',
+      );
+      expect(
+        tip(tester, 'intermediate'),
+        'Larva (Intermediate badge): support 4 different help seekers to earn it.',
+      );
+      expect(
+        tip(tester, 'expert'),
+        'Ladybug (Expert badge): support 12 different help seekers to earn it.',
+      );
+      const larva =
+          'Larva (Intermediate badge): support 4 different help seekers to earn it.';
+      expect(find.text(larva), findsNothing, reason: 'only after a tap');
+      await tester.tap(find.text('Larva'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text(larva), findsOneWidget);
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testScreen('a badge pill shows its requirement (defaults if unavailable)', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
+        const Scaffold(body: Center(child: BadgeChip(BadgeLevel.expert))),
+      );
+      expect(
+        tip(tester, 'expert'),
+        'Expert badge: support 15 different help seekers to earn it.',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
