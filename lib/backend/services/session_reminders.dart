@@ -303,15 +303,20 @@ class SessionReminders {
           e.bookingId: e.startUtc,
     };
 
+    // Each reminder is handled on its own: one the phone refuses to cancel
+    // or schedule never stops the others. A reminder that could not be
+    // canceled stays recorded, so the next reconcile tries again.
     final keep = <String, ScheduledReminder>{};
     for (final r in registry.values) {
       final want = wanted[r.key];
       if (r.userId != userId || !enabled) {
-        await scheduler.cancel(r.id); // another account, or turned off
+        // Another account, or turned off.
+        if (!await _tryCancel(r.id)) keep[r.key] = r;
       } else if (want != null) {
         if (!want.atUtc.isAtSameMomentAs(r.atUtc)) {
-          // Rescheduled: the old time goes, the new one is set below.
-          await scheduler.cancel(r.id);
+          // Rescheduled: the old time goes, the new one is set below (with
+          // the same id, which replaces the old alarm even if this fails).
+          await _tryCancel(r.id);
         }
         keep[r.key] = r;
       } else if (upcoming[r.bookingId] case final start?
@@ -322,7 +327,8 @@ class SessionReminders {
       } else if (!r.startUtc.isAfter(now)) {
         // The session has started: nothing left to change.
       } else {
-        await scheduler.cancel(r.id); // canceled, moved or not eligible
+        // Canceled, moved or not eligible.
+        if (!await _tryCancel(r.id)) keep[r.key] = r;
       }
     }
 
@@ -338,12 +344,20 @@ class SessionReminders {
       // Scheduled again every time: replaces the alarm with the same id, and
       // restores one the system dropped (for example after exact alarms
       // were turned off for the app).
-      await scheduler.schedule(
-        id: id,
-        atUtc: p.atUtc,
-        title: title,
-        body: bodyFor(p.lead),
-      );
+      try {
+        await scheduler.schedule(
+          id: id,
+          atUtc: p.atUtc,
+          title: title,
+          body: bodyFor(p.lead),
+        );
+      } catch (e) {
+        // Not scheduled now (for example its time passed a moment ago):
+        // nothing new is recorded, and an earlier record is kept as it was,
+        // so the next reconcile compares and tries again.
+        debugPrint('Session reminders: could not schedule: ${e.runtimeType}');
+        continue;
+      }
       keep[key] = ScheduledReminder(
         userId: userId,
         bookingId: p.bookingId,
@@ -357,16 +371,24 @@ class SessionReminders {
     await _save(keep, next);
   }
 
+  Future<bool> _tryCancel(int id) async {
+    try {
+      await scheduler.cancel(id);
+      return true;
+    } catch (e) {
+      debugPrint('Session reminders: could not cancel: ${e.runtimeType}');
+      return false;
+    }
+  }
+
   Future<void> _cancelWhere(bool Function(ScheduledReminder) test) async {
     if (!scheduler.isSupported) return;
     final registry = await _load();
     final keep = <String, ScheduledReminder>{};
     for (final r in registry.values) {
-      if (test(r)) {
-        await scheduler.cancel(r.id);
-      } else {
-        keep[r.key] = r;
-      }
+      // One that could not be canceled stays recorded: the next reconcile
+      // (any account) cancels it, since it is no longer wanted.
+      if (!test(r) || !await _tryCancel(r.id)) keep[r.key] = r;
     }
     await _save(keep, await _nextId({for (final r in keep.values) r.id}));
   }

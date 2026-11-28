@@ -3,6 +3,8 @@
 // device_session_reminders.dart). MOCKED: a fake scheduler and an in-memory
 // store for the rules; a mocked plugin method channel for the Android
 // scheduler. No real notification is scheduled or shown here.
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -18,6 +20,13 @@ class FakeScheduler implements ReminderScheduler {
   final canceled = <int>[];
   int calls = 0;
 
+  /// The phone refuses these: schedules at these times, cancels of these ids.
+  final failAt = <DateTime>{};
+  final failCancel = <int>{};
+
+  /// Holds every schedule call until completed (a slow phone).
+  Completer<void>? hold;
+
   @override
   Future<void> schedule({
     required int id,
@@ -26,12 +35,15 @@ class FakeScheduler implements ReminderScheduler {
     required String body,
   }) async {
     calls++;
+    await hold?.future;
+    if (failAt.contains(atUtc)) throw PlatformException(code: 'refused');
     scheduled[id] = (at: atUtc, title: title, body: body);
   }
 
   @override
   Future<void> cancel(int id) async {
     calls++;
+    if (failCancel.contains(id)) throw PlatformException(code: 'refused');
     canceled.add(id);
     scheduled.remove(id);
   }
@@ -432,6 +444,82 @@ void main() {
       await reminders.setEnabled('user-a', false);
       await sync([session()], user: 'user-b');
       expect(scheduler.scheduled, hasLength(2));
+    });
+  });
+
+  group('reliability', () {
+    test('one reminder the phone refuses does not stop the others, and is '
+        'tried again next time', () async {
+      scheduler.failAt.add(DateTime.utc(2026, 11, 28, 14));
+      await sync([session()]);
+      expect(scheduler.times, [DateTime.utc(2026, 11, 28, 14, 50)]);
+      scheduler.failAt.clear();
+      await sync([session()]);
+      expect(scheduler.times, [
+        DateTime.utc(2026, 11, 28, 14),
+        DateTime.utc(2026, 11, 28, 14, 50),
+      ]);
+      expect(scheduler.scheduled, hasLength(2), reason: 'no duplicate');
+    });
+
+    test('a cancel the phone refuses is kept and tried again', () async {
+      await sync([session()]);
+      final ids = scheduler.scheduled.keys.toSet();
+      scheduler.failCancel.addAll(ids);
+      await sync([session(status: 'canceled')]);
+      expect(scheduler.scheduled.keys.toSet(), ids, reason: 'still on phone');
+      scheduler.failCancel.clear();
+      await sync([session(status: 'canceled')]);
+      expect(scheduler.scheduled, isEmpty);
+      expect(store.registry, isNot(contains('"booking-1"')));
+    });
+
+    test(
+      'a sign-out cancel that failed is finished by the next account',
+      () async {
+        await sync([session()], user: 'user-a');
+        final a = scheduler.scheduled.keys.toSet();
+        scheduler.failCancel.addAll(a);
+        await reminders.cancelAll();
+        expect(scheduler.scheduled.keys.toSet(), a);
+        scheduler.failCancel.clear();
+        await sync([], user: 'user-b');
+        expect(scheduler.scheduled, isEmpty);
+      },
+    );
+
+    test('signing out while a reconcile is still scheduling leaves nothing '
+        'behind', () async {
+      scheduler.hold = Completer<void>();
+      final running = sync([session()], user: 'user-a');
+      // Sign-out arrives while the phone is still scheduling.
+      final signOut = reminders.cancelAll();
+      scheduler.hold!.complete();
+      await running;
+      await signOut;
+      expect(scheduler.scheduled, isEmpty);
+      expect(store.registry, contains('"reminders":[]'));
+    });
+
+    test('switching accounts while a reconcile runs: only the new account '
+        'keeps reminders', () async {
+      scheduler.hold = Completer<void>();
+      final a = sync([session()], user: 'user-a');
+      final b = sync([
+        session(
+          id: 'booking-b',
+          start: '2026-11-30T10:00:00Z',
+          end: '2026-11-30T11:00:00Z',
+        ),
+      ], user: 'user-b');
+      scheduler.hold!.complete();
+      await a;
+      await b;
+      expect(scheduler.times, [
+        DateTime.utc(2026, 11, 30, 9),
+        DateTime.utc(2026, 11, 30, 9, 50),
+      ]);
+      expect(store.registry, isNot(contains('user-a')));
     });
   });
 
