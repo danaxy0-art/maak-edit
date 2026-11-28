@@ -18,9 +18,10 @@ import 'supabase_service.dart';
 //
 // The plugin itself is initialised by ChatAlertService (Dana's new-message
 // alerts), which owns the tap handler; this file never initialises it again,
-// so her handler stays in place. Reminders carry no payload: tapping one
-// opens the app. ChatAlertService leaves notifications on this channel alone
-// when it clears its own.
+// so her handler stays in place. Reminders carry SessionReminders.tapPayload,
+// which that handler sends to the Sessions screen (also when the tap launches
+// the app). ChatAlertService leaves notifications on this channel alone when
+// it clears its own.
 
 /// Android only; nothing is scheduled on the web, desktop or iOS.
 bool get sessionRemindersSupported =>
@@ -73,6 +74,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       scheduledDate: at,
       notificationDetails: _details,
       androidScheduleMode: mode,
+      payload: SessionReminders.tapPayload,
     );
     if (await canScheduleExact()) {
       try {

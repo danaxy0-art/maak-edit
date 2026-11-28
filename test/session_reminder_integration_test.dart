@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maak_app/backend/services/chat_alert_service.dart';
+import 'package:maak_app/backend/services/push_notification_service.dart';
 import 'package:maak_app/backend/services/session_reminders.dart';
 
 void main() {
@@ -62,6 +63,35 @@ void main() {
       ]) {
         expect(SessionReminders.outsideReminderIds(id), id);
       }
+    });
+  });
+
+  group('tapping a notification', () {
+    tearDown(() => PushNotificationService.pendingOpen.value = null);
+
+    NotificationResponse tap(String payload) => NotificationResponse(
+      notificationResponseType: NotificationResponseType.selectedNotification,
+      payload: payload,
+    );
+
+    test('a session reminder opens Sessions, marking nothing as read', () {
+      ChatAlertService.onTapForTesting(tap(SessionReminders.tapPayload));
+      expect(PushNotificationService.pendingOpen.value, {
+        'id': null,
+        'kind': 'support_session',
+        'reference_id': null,
+      });
+      expect(calls.map((c) => c.method), isNot(contains('cancel')));
+    });
+
+    test('a chat alert still opens its conversation', () {
+      const chat = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+      ChatAlertService.onTapForTesting(tap(chat));
+      expect(PushNotificationService.pendingOpen.value, {
+        'id': null,
+        'kind': 'message',
+        'reference_id': chat,
+      });
     });
   });
 

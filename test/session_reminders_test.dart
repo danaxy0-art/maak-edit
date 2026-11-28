@@ -497,7 +497,7 @@ void main() {
       expect(args['timeZoneName'], 'UTC');
       expect(args['scheduledDateTime'], '2026-11-28T14:50:00');
       expect(args['id'], 7);
-      expect(args['payload'], '', reason: 'a tap only opens the app');
+      expect(args['payload'], SessionReminders.tapPayload);
       expect(
         args['platformSpecifics']['channelId'],
         LocalReminderScheduler.channelId,

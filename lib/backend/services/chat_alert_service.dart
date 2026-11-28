@@ -180,6 +180,10 @@ class ChatAlertService {
   @visibleForTesting
   static Future<void> clearShownForTesting() => _clearShown();
 
+  @visibleForTesting
+  static void onTapForTesting(NotificationResponse response) =>
+      _onTap(response);
+
   static Future<void> _clearShown() async {
     try {
       for (final n in await _plugin.getActiveNotifications()) {
@@ -324,6 +328,13 @@ class ChatAlertService {
   static void _onTap(NotificationResponse response) {
     final requestId = response.payload;
     if (requestId == null || requestId.isEmpty) return;
+    // Sprint 4 US6: a session reminder opens Sessions, not a conversation.
+    if (requestId == SessionReminders.tapPayload) {
+      PushNotificationService.pendingOpen.value = Map.of(
+        SessionReminders.tapTarget,
+      );
+      return;
+    }
     unawaited(_clear(requestId));
     // AppShell opens the conversation (same path as a tapped notification row).
     PushNotificationService.pendingOpen.value = {

@@ -146,6 +146,20 @@ class SessionReminders {
   /// notifications alone.
   static const channelId = 'maak_session_reminders';
 
+  /// Payload of every reminder: a tap opens the Sessions screen. Never a
+  /// conversation id (those are UUIDs), so the tap handler can tell them
+  /// apart.
+  static const tapPayload = 'maak:session_reminder';
+
+  /// What a tapped reminder asks the app to open: the same shape as a
+  /// tapped notification row (AppShell opens Sessions for support_session).
+  /// No id, so no notification row is marked as read.
+  static const Map<String, dynamic> tapTarget = {
+    'id': null,
+    'kind': 'support_session',
+    'reference_id': null,
+  };
+
   /// Reminders before each confirmed session, longest first.
   static const leadTimes = [Duration(hours: 1), Duration(minutes: 10)];
 
