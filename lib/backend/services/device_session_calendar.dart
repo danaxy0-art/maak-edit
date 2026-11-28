@@ -29,20 +29,49 @@ class DeviceCalendarGateway implements CalendarGateway {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
-  /// The calendar new events go into, chosen by [requestAccess]: the primary
-  /// writable calendar, otherwise the first writable one. Passed explicitly
-  /// so events never land in a hidden or read-only default calendar.
+  /// The calendar new events go into, chosen by [requestAccess] with
+  /// [pickCalendar]. Passed explicitly so events never land in a hidden or
+  /// read-only default calendar.
   String? _target;
+  String? _targetName;
 
-  /// Primary writable calendar first, then any writable one.
+  @override
+  String? get calendarName => _targetName;
+
+  /// The writable calendar the member is most likely to look at. Many phones
+  /// also have a local "Phone"/"My calendar" calendar marked primary, which
+  /// calendar apps such as Google Calendar do not show, and a member can hide
+  /// a calendar in their app: an event saved there exists (so "Added" is
+  /// true) but is never seen. So, best first:
+  ///  1. shown, the main calendar of a Google account;
+  ///  2. shown, the main calendar of another synced account;
+  ///  3. shown, any calendar of a synced account;
+  ///  4. shown, a local calendar (main one first);
+  ///  5. hidden calendars, in the same order, as a last resort.
+  /// Ties keep the phone's order.
   static Calendar? pickCalendar(List<Calendar> calendars) {
     final writable = calendars.where((c) => !c.readOnly).toList();
     if (writable.isEmpty) return null;
-    return writable.firstWhere(
-      // `== true` works whether the plugin types isPrimary as bool or bool?.
-      (c) => c.isPrimary == true,
-      orElse: () => writable.first,
-    );
+    int rank(Calendar c) {
+      final type = c.accountType?.toLowerCase() ?? '';
+      final local = type.isEmpty || type == 'local';
+      // `== true` works whether the plugin types these as bool or bool?.
+      final primary = c.isPrimary == true;
+      final base = switch ((local, primary)) {
+        (false, true) when type == 'com.google' => 0,
+        (false, true) => 1,
+        (false, false) => 2,
+        (true, true) => 3,
+        (true, false) => 4,
+      };
+      return (c.hidden == true ? 10 : 0) + base;
+    }
+
+    var best = writable.first;
+    for (final c in writable.skip(1)) {
+      if (rank(c) < rank(best)) best = c;
+    }
+    return best;
   }
 
   @override
@@ -58,6 +87,7 @@ class DeviceCalendarGateway implements CalendarGateway {
         // A phone with no calendar account cannot store events.
         final target = pickCalendar(await _plugin.listCalendars());
         _target = target?.id;
+        _targetName = target?.name;
         return target != null
             ? CalendarAccess.granted
             : CalendarAccess.unavailable;
