@@ -764,7 +764,12 @@ class _RequestDecisionButtonsState extends State<RequestDecisionButtons> {
     child: Row(
       children: [
         Expanded(
+          // ADDED BY RAZAN: Decline is outlined in red (same look as Cancel request).
           child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB54747),
+              side: const BorderSide(color: Color(0xFFB54747)),
+            ),
             onPressed: _busy || _saved ? null : () => _decide(false),
             child: const Text('Decline'),
           ),
@@ -2877,11 +2882,14 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
   }
 
   @override
-  Widget build(BuildContext context) => PillButton(
-    _busy ? 'Canceling...' : 'Cancel request',
-    outlined: true,
-    compact: true,
+  // ADDED BY RAZAN: same outlined look as Decline, in red.
+  Widget build(BuildContext context) => OutlinedButton(
+    style: OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFFB54747),
+      side: const BorderSide(color: Color(0xFFB54747)),
+    ),
     onPressed: _busy ? null : _cancel,
+    child: Text(_busy ? 'Canceling...' : 'Cancel request'),
   );
 }
 // ┘ç┘╪د ╪ز┘╪ز┘ç┘è

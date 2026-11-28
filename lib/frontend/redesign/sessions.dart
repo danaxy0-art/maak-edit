@@ -276,11 +276,17 @@ Future<bool> _confirm(
 class AvailabilityPage extends StatelessWidget {
   const AvailabilityPage({super.key});
 
-  Future<void> _add(BuildContext context, VoidCallback reload) async {
+  // ADDED BY RAZAN: static so the Sessions page can start the same steps from its + button.
+  static Future<void> _add(BuildContext context, VoidCallback reload) async {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
       helpText: 'Choose the day',
+      // ADDED BY RAZAN: day / month / year order, with the format shown to the member.
+      locale: const Locale('en', 'GB'),
+      fieldLabelText: 'Date (day/month/year)',
+      fieldHintText: 'DD/MM/YYYY',
+      errorFormatText: 'Write the date as DD/MM/YYYY',
       initialDate: now.add(const Duration(days: 1)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 90)),
@@ -554,14 +560,24 @@ class SessionsPage extends StatelessWidget {
     header: (_) => _volunteer
         ? Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: ActionRow(
-              icon: Icons.event_available_outlined,
-              title: 'My available times',
-              subtitle: 'Set when you can support someone',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AvailabilityPage()),
-              ),
+            // ADDED BY RAZAN: one tap on + starts adding a time slot.
+            child: Column(
+              children: [
+                PillButton(
+                  'Add a time slot',
+                  icon: Icons.add,
+                  expand: true,
+                  onPressed: () => AvailabilityPage._add(context, () {}),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.event_available_outlined),
+                  label: const Text('My available times'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AvailabilityPage()),
+                  ),
+                ),
+              ],
             ),
           )
         : const SizedBox.shrink(),
