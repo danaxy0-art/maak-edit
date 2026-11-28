@@ -166,6 +166,13 @@ class SessionReminders {
   static const firstId = 0x3E000000;
   static const lastId = 0x3EFFFFFF;
 
+  /// [id] if it lies outside the reminders' range, otherwise the matching id
+  /// in the next block (0x3F……). Other code that derives notification ids
+  /// (for example from a hash) passes them through this, so it can never
+  /// show, replace or cancel a session reminder by accident.
+  static int outsideReminderIds(int id) =>
+      id >= firstId && id <= lastId ? id ^ 0x01000000 : id;
+
   static String keyOf(String userId, String bookingId, int leadMinutes) =>
       '$userId|$bookingId|$leadMinutes';
 

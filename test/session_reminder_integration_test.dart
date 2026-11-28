@@ -36,6 +36,35 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  group('notification ids', () {
+    test('ids derived elsewhere never fall in the reminders\' range', () {
+      const first = SessionReminders.firstId, last = SessionReminders.lastId;
+      for (final id in [
+        first,
+        first + 1,
+        (first + last) ~/ 2,
+        last - 1,
+        last,
+      ]) {
+        final mapped = SessionReminders.outsideReminderIds(id);
+        expect(mapped < first || mapped > last, isTrue, reason: '$id');
+        expect(mapped, inInclusiveRange(0, 0x7fffffff));
+      }
+    });
+
+    test('ids outside the range are unchanged', () {
+      for (final id in [
+        0,
+        1,
+        SessionReminders.firstId - 1,
+        SessionReminders.lastId + 1,
+        0x7fffffff,
+      ]) {
+        expect(SessionReminders.outsideReminderIds(id), id);
+      }
+    });
+  });
+
   group('chat alerts clearing notifications', () {
     test('clears chat alerts and pushes, keeps session reminders, and never '
         'touches scheduled ones', () async {

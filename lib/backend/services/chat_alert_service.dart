@@ -364,8 +364,9 @@ class ChatAlertService {
   }
 
   /// A stable notification id per conversation (within this app run).
+  /// Never one of the ids session reminders use (Sprint 4 US6).
   static int _notificationId(String requestId) =>
-      requestId.hashCode & 0x7fffffff;
+      SessionReminders.outsideReminderIds(requestId.hashCode & 0x7fffffff);
 
   @visibleForTesting
   static void disposeForTest() {
