@@ -619,6 +619,21 @@ class _PreferenceRow extends StatelessWidget {
   );
 }
 
+// Keep request status presentation consistent across both member roles.
+(String, IconData, Color) _supportRequestStatus(
+  Object? status, {
+  bool incoming = false,
+}) => switch (status) {
+  'pending' => (
+    incoming ? 'Pending' : 'Awaiting response',
+    Icons.schedule,
+    MaakColors.pending,
+  ),
+  'accepted' => ('Connected', Icons.check, const Color(0xFFCDEFD8)),
+  'canceled' => ('Canceled', Icons.block, const Color(0xFFE3E5E8)),
+  _ => ('Declined', Icons.close, const Color(0xFFFAC9C9)),
+};
+
 class RequestsPage extends StatelessWidget {
   const RequestsPage({super.key});
   @override
@@ -627,87 +642,86 @@ class RequestsPage extends StatelessWidget {
     load: SupabaseService.getRequests,
     emptyTitle: 'No requests yet',
     emptyText: 'New help seeker requests will appear here.',
-    item: (context, row, refresh) => SurfaceCard(
-      padding: const EdgeInsets.all(MaakSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InitialsAvatar(
-                initials(row['contact_name'] as String? ?? 'Help seeker'),
-                userId: otherParticipantId(row),
-              ),
-              const SizedBox(width: MaakSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      row['contact_name'] as String? ?? 'Help seeker',
-                      style: MaakText.itemTitle,
-                    ),
-                    if ((row['condition'] as String? ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 2),
+    item: (context, row, refresh) {
+      final status = row['status'];
+      final sent = formatDay(row['created_at'] as String?);
+      final past = status != 'pending' && status != 'accepted';
+      final (label, icon, color) = _supportRequestStatus(status, incoming: true);
+      return SoftCard(
+        flat: past,
+        color: past ? MaakColors.warmWhite : MaakColors.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InitialsAvatar(
+                  initials(row['contact_name'] as String? ?? 'Help seeker'),
+                  userId: otherParticipantId(row),
+                ),
+                const SizedBox(width: MaakSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        row['condition'] as String,
-                        style: MaakText.body.copyWith(fontSize: 13),
+                        row['contact_name'] as String? ?? 'Help seeker',
+                        style: MaakText.itemTitle,
+                      ),
+                      if ((row['condition'] as String? ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          row['condition'] as String,
+                          style: MaakText.body.copyWith(fontSize: 13),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: MaakSpace.sm,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          StatusPill(label: label, icon: icon, color: color),
+                          if (sent.isNotEmpty)
+                            Text('Sent $sent', style: MaakText.caption),
+                        ],
                       ),
                     ],
-                    const SizedBox(height: 6),
-                    // The status text is shown as stored; the icon keeps it
-                    // from relying on colour alone.
-                    StatusPill(
-                      label: row['status'] as String,
-                      icon: switch (row['status']) {
-                        'pending' => Icons.schedule,
-                        'accepted' => Icons.check,
-                        'canceled' => Icons.block,
-                        _ => Icons.close,
-                      },
-                      // Same green / red / grey as the help seeker's
-                      // request cards (_RequestCard).
-                      color: switch (row['status']) {
-                        'pending' => MaakColors.pending,
-                        'accepted' => const Color(0xFFCDEFD8),
-                        'canceled' => const Color(0xFFE3E5E8),
-                        _ => const Color(0xFFFAC9C9),
-                      },
-                    ),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+            if ((row['description'] as String? ?? '').isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: MaakSpace.md),
+                child: Text(
+                  row['description'] as String,
+                  style: MaakText.body.copyWith(color: MaakColors.ink),
+                ),
+              ),
+            if (row['status'] == 'pending')
+              RequestDecisionButtons(
+                key: ValueKey(row['id']),
+                requestId: row['id'] as String,
+                onSaved: refresh,
+              ),
+            if (row['status'] == 'accepted') ...[
+              const SizedBox(height: MaakSpace.md),
+              PrimaryButton(
+                'Open conversation',
+                icon: Icons.chat_bubble_outline,
+                onPressed: () => ConversationPage.open(
+                  context,
+                  requestId: row['id'] as String,
+                  name: row['contact_name'] as String? ?? 'Your peer',
                 ),
               ),
             ],
-          ),
-          if ((row['description'] as String? ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: MaakSpace.md),
-              child: Text(
-                row['description'] as String,
-                style: MaakText.body.copyWith(color: MaakColors.ink),
-              ),
-            ),
-          if (row['status'] == 'pending')
-            RequestDecisionButtons(
-              key: ValueKey(row['id']),
-              requestId: row['id'] as String,
-              onSaved: refresh,
-            ),
-          if (row['status'] == 'accepted') ...[
-            const SizedBox(height: 12),
-            PrimaryButton(
-              'Open conversation',
-              onPressed: () => ConversationPage.open(
-                context,
-                requestId: row['id'] as String,
-                name: row['contact_name'] as String? ?? 'Your peer',
-              ),
-            ),
           ],
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 
@@ -2790,12 +2804,7 @@ class _RequestCard extends StatelessWidget {
     final name = request['contact_name'] as String? ?? 'Volunteer';
     final sent = formatDay(request['created_at'] as String?);
     // ADDED: distinct colour per state
-    final (label, icon, color) = switch (status) {
-      'pending' => ('Awaiting response', Icons.schedule, MaakColors.pending),
-      'accepted' => ('Connected', Icons.check, const Color(0xFFCDEFD8)),
-      'canceled' => ('Canceled', Icons.block, const Color(0xFFE3E5E8)),
-      _ => ('Declined', Icons.close, const Color(0xFFFAC9C9)),
-    };
+    final (label, icon, color) = _supportRequestStatus(status);
     return SoftCard(
       flat: past,
       color: past ? MaakColors.warmWhite : MaakColors.surface,
@@ -2903,10 +2912,23 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
             compact: true,
             onPressed: () => Navigator.pop(dialogContext, false),
           ),
-          PillButton(
-            'Cancel request',
-            compact: true,
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFFB54747),
+              minimumSize: const Size(64, 44),
+              padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: MaakSpace.lg,
+                vertical: MaakSpace.sm,
+              ),
+              shape: const StadiumBorder(),
+            ),
             onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              'Cancel request',
+              textAlign: TextAlign.center,
+              style: MaakText.button.copyWith(fontSize: 14),
+            ),
           ),
         ],
       ),
