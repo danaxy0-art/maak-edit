@@ -21,6 +21,9 @@ dependencies:
   image_picker: ^1.1.2
   camera: ^0.11.0
   flutter_local_notifications: ^20.1.0
+  # Exact times for scheduled reminders: Sprint 4 US6 session reminders and
+  # the Personal Health Planner (was transitive, through
+  # flutter_local_notifications; same resolved version).
   timezone: ^0.10.1
   # Sprint 4 US5: add confirmed sessions to the phone calendar. Pinned exactly:
   # pre-1.0 releases change behaviour. Needs Flutter >=3.44 / Dart >=3.12,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../backend/services/device_session_calendar.dart';
+import '../../backend/services/device_session_reminders.dart';
 import '../../backend/services/session_calendar.dart';
 import '../design/components.dart';
 import '../design/tokens.dart';
@@ -43,6 +44,11 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
     super.initState();
     _state = _initialState();
     _refresh();
+    // US6: a confirmed session appeared on the Sessions screen (for example
+    // just accepted): bring the session reminders up to date. Reminders do
+    // not depend on the calendar; this widget is only where the screen
+    // shows each confirmed session.
+    AppSessionReminders.sessionsChanged();
   }
 
   /// Shown at once for an eligible session ("Add to calendar"), instead of
@@ -57,21 +63,40 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
   @override
   void didUpdateWidget(SessionCalendarButton old) {
     super.didUpdateWidget(old);
-    // The list reloaded (for example after a reschedule): label again.
-    if (old.session['id'] != widget.session['id'] ||
-        old.session['slot_id'] != widget.session['slot_id'] ||
-        old.session['starts_at'] != widget.session['starts_at'] ||
-        old.session['status'] != widget.session['status'] ||
-        old.session['display_status'] != widget.session['display_status']) {
-      if (old.session['id'] != widget.session['id']) _state = _initialState();
+    // The list reloaded (for example after a reschedule): label again. The
+    // end time is checked too, although a new end normally means a new slot.
+    const fields = [
+      'id',
+      'slot_id',
+      'starts_at',
+      'ends_at',
+      'status',
+      'display_status',
+    ];
+    final changedSession = old.session['id'] != widget.session['id'];
+    if (old.calendar != widget.calendar ||
+        fields.any((f) => old.session[f] != widget.session[f])) {
+      if (changedSession || old.calendar != widget.calendar) {
+        _state = _initialState();
+      }
       _refresh();
+      AppSessionReminders.sessionsChanged(); // US6: rescheduled
     }
   }
 
+  @override
+  void dispose() {
+    // US6: canceled, rescheduled by the help seeker (back to pending), or
+    // started: the card no longer shows a confirmed session.
+    AppSessionReminders.sessionsChanged();
+    super.dispose();
+  }
+
   Future<void> _refresh() async {
-    if (!_calendar.gateway.isSupported) return; // web / desktop: never shown
+    final calendar = _calendar;
+    if (!calendar.gateway.isSupported) return; // web / desktop: never shown
     final check = ++_check;
-    final state = await _calendar.stateOf(widget.session);
+    final state = await calendar.stateOf(widget.session);
     if (mounted && check == _check) setState(() => _state = state);
   }
 

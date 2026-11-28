@@ -83,6 +83,12 @@ void main() {
         detectSessionInUri: false,
         pkceAsyncStorage: _PkceStorage(),
       ),
+      // realtime_client 2.13 waits 50 s after the last channel closes before
+      // disconnecting; that timer outlived each test ("A Timer is still
+      // pending"). Disconnect at once in tests; the app keeps the default.
+      realtimeClientOptions: const RealtimeClientOptions(
+        disconnectOnEmptyChannelsAfter: Duration.zero,
+      ),
       httpClient: MockClient((request) async {
         final name = request.url.pathSegments.last;
         calls.add(name);

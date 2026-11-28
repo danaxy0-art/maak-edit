@@ -5,7 +5,9 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <!-- Push notifications on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Personal health reminder scheduling -->
+    <!-- Personal health reminder scheduling (also used by the Sprint 4 US6
+         session reminders: restored after a restart, on time when exact
+         alarms are allowed) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Notification vibration on older Android versions -->
@@ -45,7 +47,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Personal health reminder receivers -->
+        <!-- Personal health reminder receivers (also show the Sprint 4 US6
+             session reminders, including when the app is closed) -->
         <receiver
             android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />

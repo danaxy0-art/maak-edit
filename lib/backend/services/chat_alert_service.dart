@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../chat/chat_media_policy.dart';
 import 'push_notification_service.dart';
+import 'session_reminders.dart' show SessionReminders;
 import 'supabase_service.dart';
 
 /// New-message alerts built without Firebase Cloud Messaging.
@@ -171,7 +172,36 @@ class ChatAlertService {
       } catch (_) {}
     }
     // Nobody else's messages stay on this phone after sign-out.
-    if (_initialized) {
+    if (_initialized) await _clearShown(chatIds);
+  }
+
+  /// Removes the notifications on screen except reminders: session reminders
+  /// (Sprint 4 US6) and personal health reminders, which keep their own
+  /// schedules and are canceled by their own services on sign-out.
+  /// cancelAll() would also delete reminders scheduled for later, and this
+  /// runs at every start and sign-in, not only at sign-out. If the list
+  /// cannot be read, only this service's chat alerts ([chatIds]) are
+  /// cleared.
+  @visibleForTesting
+  static Future<void> clearShownForTesting([List<String> chatIds = const []]) =>
+      _clearShown(chatIds);
+
+  @visibleForTesting
+  static void onTapForTesting(NotificationResponse response) =>
+      _onTap(response);
+
+  static Future<void> _clearShown(List<String> chatIds) async {
+    try {
+      for (final n in await _plugin.getActiveNotifications()) {
+        final id = n.id;
+        if (id == null ||
+            n.channelId == SessionReminders.channelId ||
+            n.payload?.startsWith('personal_reminder:') == true) {
+          continue;
+        }
+        await _plugin.cancel(id: id, tag: n.tag);
+      }
+    } catch (_) {
       try {
         for (final requestId in chatIds) {
           await _plugin.cancel(id: _notificationId(requestId));
@@ -314,6 +344,13 @@ class ChatAlertService {
 
     final requestId = response.payload;
     if (requestId == null || requestId.isEmpty) return;
+    // Sprint 4 US6: a session reminder opens Sessions, not a conversation.
+    if (requestId == SessionReminders.tapPayload) {
+      PushNotificationService.pendingOpen.value = Map.of(
+        SessionReminders.tapTarget,
+      );
+      return;
+    }
     unawaited(_clear(requestId));
     // AppShell opens the conversation (same path as a tapped notification row).
     PushNotificationService.pendingOpen.value = {
@@ -354,8 +391,9 @@ class ChatAlertService {
   }
 
   /// A stable notification id per conversation (within this app run).
+  /// Never one of the ids session reminders use (Sprint 4 US6).
   static int _notificationId(String requestId) =>
-      requestId.hashCode & 0x7fffffff;
+      SessionReminders.outsideReminderIds(requestId.hashCode & 0x7fffffff);
 
   @visibleForTesting
   static void disposeForTest() {

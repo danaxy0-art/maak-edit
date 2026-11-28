@@ -59,19 +59,36 @@ class BadgeProgress {
   final BadgeLevel? badge;
   final BadgeLevel? next;
   final int? nextMin;
+
+  /// Help seekers needed for the current badge (0 without one): progress to
+  /// the next badge is counted from here, not from zero.
+  final int currentMin;
   const BadgeProgress({
     required this.supported,
     this.badge,
     this.next,
     this.nextMin,
+    this.currentMin = 0,
   });
 
-  static BadgeProgress? fromJson(Object? json) => json is Map
+  /// Share of the way from the current badge to the next one, 0 to 1; null
+  /// at the highest badge.
+  double? get towardNext {
+    final target = nextMin;
+    if (next == null || target == null || target <= currentMin) return null;
+    return ((supported - currentMin) / (target - currentMin))
+        .clamp(0, 1)
+        .toDouble();
+  }
+
+  static BadgeProgress? fromJson(Object? json, {Map<String, int>? levels}) =>
+      json is Map
       ? BadgeProgress(
           supported: (json['supported'] as num?)?.toInt() ?? 0,
           badge: BadgeLevel.parse(json['badge']),
           next: BadgeLevel.parse(json['next_badge']),
           nextMin: (json['next_min'] as num?)?.toInt(),
+          currentMin: levels?['${json['badge']}'] ?? 0,
         )
       : null;
 }
@@ -272,10 +289,16 @@ class VolunteerStatsService {
     return defaultBadgeThresholds;
   }
 
-  static Future<BadgeProgress?> myBadgeProgress() async =>
-      BadgeProgress.fromJson(
-        await SupabaseService.client.rpc('my_maak_badge_progress'),
-      );
+  static Future<BadgeProgress?> myBadgeProgress() async {
+    final json = await SupabaseService.client.rpc('my_maak_badge_progress');
+    // The same thresholds the badge tips use give the current badge's start,
+    // so the progress line is measured between this badge and the next.
+    final thresholds = await badgeThresholds();
+    return BadgeProgress.fromJson(
+      json,
+      levels: {for (final e in thresholds.entries) e.key.name: e.value},
+    );
+  }
 
   /// Summary for one volunteer, or null when none is available (not an
   /// approved, active volunteer, or the summary could not be loaded).

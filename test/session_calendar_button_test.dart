@@ -7,10 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maak_app/backend/services/device_session_calendar.dart';
 import 'package:maak_app/backend/services/session_calendar.dart';
+import 'package:maak_app/frontend/redesign/session_calendar_button.dart';
 import 'package:maak_app/frontend/redesign/sessions.dart';
 
 import 'helpers/screen_harness.dart';
-import 'session_calendar_test.dart' show FakeCalendar, MemoryStore;
+import 'session_calendar_test.dart' show FakeCalendar, MemoryStore, tokens;
 
 String _at(int days, int hour) => DateTime.now()
     .add(Duration(days: days))
@@ -52,6 +53,7 @@ void main() {
     AppSessionCalendar.instance = SessionCalendar(
       gateway: calendar,
       store: store,
+      newToken: tokens(),
     );
   });
   tearDown(() => AppSessionCalendar.instance = null);
@@ -180,7 +182,7 @@ void main() {
       'ends_at': _at(2, 11),
     })!;
     calendar.events['evt-1'] = old;
-    store.saved['a'] = SavedSessionEvent.of(old, 'evt-1');
+    store.saved['a'] = SavedSessionEvent.of(old, eventId: 'evt-1');
     await open(tester, [row]);
     expect(find.text('Update calendar'), findsOneWidget);
     expect(find.textContaining('still shows the old time'), findsOneWidget);
@@ -189,6 +191,105 @@ void main() {
     expect(find.text('In your calendar'), findsOneWidget);
     expect(calendar.updates, 1);
     expect(calendar.creates, 0);
+  });
+
+  group('refresh race', () {
+    // Each read waits until the test releases it, so answers can be
+    // delivered out of order.
+    late _HeldStore held;
+    late SessionCalendar slow;
+    setUp(() {
+      held = _HeldStore();
+      slow = SessionCalendar(
+        gateway: calendar,
+        store: held,
+        newToken: tokens(),
+      );
+    });
+
+    // The card stays mounted and receives a new row, as when the session
+    // list reloads (this is what reaches didUpdateWidget).
+    late ValueNotifier<Map<String, dynamic>> row;
+    Future<void> show(WidgetTester tester, Map<String, dynamic> first) {
+      row = ValueNotifier(first);
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: row,
+              builder: (_, value, _) =>
+                  SessionCalendarButton(session: value, calendar: slow),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('an older, slower answer never overwrites a newer one', (
+      tester,
+    ) async {
+      final before = _row('a', 'accepted', slot: 'old');
+      final after = {
+        ...before,
+        'slot_id': 'new-a',
+        'starts_at': _at(4, 18),
+        'ends_at': _at(4, 19),
+      };
+      // Saved at the old time: old row = "In your calendar",
+      // rescheduled row = "Update calendar".
+      held.saved['a'] = SavedSessionEvent.of(
+        SessionCalendarEvent.fromSession(before)!,
+        eventId: 'evt-1',
+      );
+      calendar.events['evt-1'] = SessionCalendarEvent.fromSession(before)!;
+      await show(tester, before); // refresh 1 (old row) waits
+      row.value = after; // the list reloads: refresh 2 (new row) waits
+      await tester.pump();
+      expect(held.waiting, 2);
+      held.release(1); // the newer answer first
+      // One frame for the answer, one to draw it.
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Update calendar'), findsOneWidget);
+      held.release(0); // the stale answer arrives late
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text('Update calendar'),
+        findsOneWidget,
+        reason: 'stale "In your calendar" ignored',
+      );
+      expect(find.text('In your calendar'), findsNothing);
+    });
+
+    testWidgets('an answer arriving after the card is gone is dropped', (
+      tester,
+    ) async {
+      await show(tester, _row('a', 'accepted'));
+      expect(held.waiting, 1);
+      await tester.pumpWidget(const SizedBox());
+      held.release(0);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('only the end time changing still refreshes the label', (
+      tester,
+    ) async {
+      final first = _row('a', 'accepted');
+      await show(tester, first);
+      held.release(0);
+      await tester.pump();
+      final reads = held.reads;
+      row.value = {...first, 'ends_at': _at(3, 20)};
+      await tester.pump();
+      expect(held.reads, reads + 1, reason: 'a new refresh for the new end');
+      held.releaseLast();
+      await tester.pump();
+      row.value = {...row.value}; // same values: no extra refresh
+      await tester.pump();
+      expect(held.reads, reads + 1);
+    });
   });
 
   testScreen('unsupported platform: no action, Razan\'s buttons unchanged', (
@@ -201,4 +302,28 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
     expect(calendar.accessRequests, 0);
   });
+}
+
+/// A [MemoryStore] whose reads wait until the test releases them.
+class _HeldStore extends MemoryStore {
+  final _gates = <Completer<void>?>[];
+  int reads = 0;
+
+  /// Reads still waiting.
+  int get waiting => _gates.where((g) => g != null && !g.isCompleted).length;
+
+  /// Lets read number [index] (0 = the first) finish.
+  void release(int index) => _gates[index]!.complete();
+
+  /// Lets the most recent read finish.
+  void releaseLast() => _gates.last!.complete();
+
+  @override
+  Future<SavedSessionEvent?> read(String bookingId) async {
+    reads++;
+    final gate = Completer<void>();
+    _gates.add(gate);
+    await gate.future;
+    return super.read(bookingId);
+  }
 }

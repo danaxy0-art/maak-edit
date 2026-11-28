@@ -1,9 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'backend/services/account_status_watcher.dart';
 import 'backend/services/chat_alert_service.dart';
+import 'backend/services/device_session_reminders.dart';
 import 'backend/services/push_notification_service.dart';
 import 'backend/services/supabase_service.dart';
 import 'backend/services/realtime_presence_service.dart';
@@ -19,6 +21,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Sprint 4 US6: pushes received while the app is closed or in the
+  // background. Firebase allows one such handler for the whole app; add any
+  // other background work to it rather than registering a second one.
+  if (sessionRemindersSupported) {
+    FirebaseMessaging.onBackgroundMessage(sessionRemindersOnBackgroundMessage);
+  }
   await SupabaseService.init();
 
   // Dark status bar icons on every screen (see AppTheme.systemBars).
@@ -31,6 +39,10 @@ Future<void> main() async {
 
   // New chat message alerts: Supabase Realtime + local notifications (no FCM).
   await ChatAlertService.init();
+
+  // Sprint 4 US6: reminders before confirmed sessions, scheduled on the phone.
+  // Started after the chat alerts, which initialise the notification plugin.
+  AppSessionReminders.init();
 
   PersonalReminderNotificationService.initialize();
   PersonalReminderSyncService.initialize();

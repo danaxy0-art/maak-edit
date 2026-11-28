@@ -190,6 +190,12 @@ void main() {
         detectSessionInUri: false,
         pkceAsyncStorage: _PkceStorage(),
       ),
+      // realtime_client 2.13 waits 50 s after the last channel closes before
+      // disconnecting; that timer outlived each test ("A Timer is still
+      // pending"). Disconnect at once in tests; the app keeps the default.
+      realtimeClientOptions: const RealtimeClientOptions(
+        disconnectOnEmptyChannelsAfter: Duration.zero,
+      ),
       httpClient: MockClient((request) async {
         final name = request.url.pathSegments.last;
         final body = request.body.isEmpty ? null : jsonDecode(request.body);
@@ -538,7 +544,9 @@ void main() {
 
     for (final entry in {
       'phone': (phone, false),
-      'phone with short content': (const Size(390, 1400), true),
+      // Tall enough that the whole Overview fits without scrolling, with
+      // room for new Overview entries (Health Library articles added 71 px).
+      'phone with short content': (const Size(390, 1600), true),
       'tablet with short content': (const Size(1024, 1366), true),
     }.entries) {
       testWidgets('${entry.key}: pulling refreshes the Overview in place', (
