@@ -24,6 +24,7 @@ import '../widgets/peer_presence.dart';
 import '../../backend/chat/chat_media_policy.dart' show chatMediaCaption;
 import 'report_message.dart'; // ADDED: report a message
 import 'ratings.dart'; // Sprint 4: volunteer ratings
+import 'member_profile.dart'; // tap the chat header to open the profile
 
 class DataListPage extends StatefulWidget {
   final String title;
@@ -764,7 +765,12 @@ class _RequestDecisionButtonsState extends State<RequestDecisionButtons> {
     child: Row(
       children: [
         Expanded(
+          // ADDED BY RAZAN: Decline is outlined in red (same look as Cancel request).
           child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB54747),
+              side: const BorderSide(color: Color(0xFFB54747)),
+            ),
             onPressed: _busy || _saved ? null : () => _decide(false),
             child: const Text('Decline'),
           ),
@@ -1989,22 +1995,60 @@ class _ConversationPageState extends State<ConversationPage>
           ],
         ),
       ],
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          if (!_closed &&
-              !_statusLoading &&
-              _statusError == null &&
-              _peerId != null)
-            PeerPresence(userId: _peerId!)
-          else
-            const Text(
-              'Private conversation',
-              style: TextStyle(fontSize: 12, color: MaakColors.muted),
+      // Photo, name and presence: tap to open the other person's profile.
+      title: Semantics(
+        button: _peerId != null,
+        label: _peerId == null ? widget.name : '${widget.name}. Open profile',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _peerId == null
+              ? null
+              : () => MemberProfilePage.open(
+                    context,
+                    userId: _peerId!,
+                    name: widget.name,
+                  ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                UserPhoto(
+                  userId: _peerId,
+                  size: 36,
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: MaakColors.blush,
+                    child: Text(
+                      initials(widget.name),
+                      style: const TextStyle(fontSize: 13, color: MaakColors.ink),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (!_closed &&
+                          !_statusLoading &&
+                          _statusError == null &&
+                          _peerId != null)
+                        PeerPresence(userId: _peerId!)
+                      else
+                        const Text(
+                          'Private conversation',
+                          style: TextStyle(fontSize: 12, color: MaakColors.muted),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     ),
     body: ResponsiveBody(
@@ -2877,11 +2921,14 @@ class _CancelRequestButtonState extends State<CancelRequestButton> {
   }
 
   @override
-  Widget build(BuildContext context) => PillButton(
-    _busy ? 'Canceling...' : 'Cancel request',
-    outlined: true,
-    compact: true,
+  // ADDED BY RAZAN: same outlined look as Decline, in red.
+  Widget build(BuildContext context) => OutlinedButton(
+    style: OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFFB54747),
+      side: const BorderSide(color: Color(0xFFB54747)),
+    ),
     onPressed: _busy ? null : _cancel,
+    child: Text(_busy ? 'Canceling...' : 'Cancel request'),
   );
 }
 // ┘ç┘╪د ╪ز┘╪ز┘ç┘è

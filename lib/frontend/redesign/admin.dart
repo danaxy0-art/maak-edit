@@ -57,17 +57,14 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
-  static const appealsTab = 4;
-  static const analyticsTab = 5;
+  // Conditions and Accounts open from the Overview cards, not the nav bar.
+  static const appealsTab = 2;
+  static const analyticsTab = 3;
   final _navigator = GlobalKey<NavigatorState>();
   int _index = 0;
   int _pendingAppeals = 0;
   Widget _page(int index) => index == 1
       ? const ApplicationsPage()
-      : index == 2
-      ? const ConditionsAdminPage()
-      : index == 3
-      ? const AccountsAdminPage()
       : index == appealsTab
       ? const AppealsAdminPage()
       : index == analyticsTab
@@ -131,11 +128,6 @@ class _AdminShellState extends State<AdminShell> {
         const MaakNavItem(
           icon: Icons.description_outlined,
           label: 'Applications',
-        ),
-        const MaakNavItem(icon: Icons.favorite_border, label: 'Conditions'),
-        const MaakNavItem(
-          icon: Icons.manage_accounts_outlined,
-          label: 'Accounts',
         ),
         MaakNavItem(
           icon: Icons.rate_review_outlined,
@@ -309,14 +301,28 @@ class _AdminOverviewState extends State<AdminOverview> {
                         'Chronic conditions',
                         'Manage condition types',
                         Icons.favorite_border,
-                        () => widget.select(2),
+                        () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ConditionsAdminPage(),
+                            ),
+                          );
+                          // Refresh the "Active conditions" count.
+                          if (mounted) setState(_load);
+                        },
                       ),
                       const SizedBox(height: 14),
                       _menu(
                         'Manage accounts',
                         'Block or reactivate accounts',
                         Icons.manage_accounts_outlined,
-                        () => widget.select(3),
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AccountsAdminPage(),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 14),
                       _menu(

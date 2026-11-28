@@ -155,14 +155,15 @@ class _LifeCyclePainter extends CustomPainter {
   bool shouldRepaint(_LifeCyclePainter old) => old.level != level;
 }
 
-/// "Intermediate badge" pill with its life-cycle icon.
+/// "Intermediate badge" pill with its life-cycle icon. Tap it for a small
+/// message saying how many help seekers the badge takes.
 class BadgeChip extends StatelessWidget {
   final BadgeLevel level;
   const BadgeChip(this.level, {super.key});
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: badgeMeaning,
+    return _BadgeRequirementTip(
+      level: level,
       child: Semantics(
         label: '${level.label} participation badge',
         excludeSemantics: true,
@@ -420,7 +421,10 @@ class _LifeCycle extends StatelessWidget {
     final status = isCurrent
         ? 'your current badge'
         : (earned ? 'earned' : 'not earned yet');
-    return Semantics(
+    return _BadgeRequirementTip(
+      level: level,
+      stage: _stage[level],
+      child: Semantics(
       container: true,
       label: '${_stage[level]}, ${level.label} badge, $status',
       excludeSemantics: true,
@@ -474,6 +478,61 @@ class _LifeCycle extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
+}
+
+/// Tap (or long-press) a badge for a small message, styled like the progress
+/// card's "i" button, saying how many help seekers the badge takes. The
+/// numbers come from volunteer_badge_levels, which administrators can change;
+/// screen readers read the message as the badge's tooltip.
+class _BadgeRequirementTip extends StatelessWidget {
+  final BadgeLevel level;
+
+  /// Life-cycle stage name (Worm, Larva, Ladybug) when shown with the stages.
+  final String? stage;
+  final Widget child;
+  const _BadgeRequirementTip({
+    required this.level,
+    required this.child,
+    this.stage,
+  });
+
+  static String message(BadgeLevel level, int needed, {String? stage}) {
+    final name = stage == null
+        ? '${level.label} badge'
+        : '$stage (${level.label} badge)';
+    return needed == 1
+        ? '$name: support your first help seeker to earn it.'
+        : '$name: support $needed different help seekers to earn it.';
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FutureBuilder<Map<BadgeLevel, int>>(
+        future: VolunteerStatsService.badgeThresholds(),
+        builder: (context, snapshot) {
+          final needed = (snapshot.data ??
+              VolunteerStatsService.defaultBadgeThresholds)[level]!;
+          return Tooltip(
+            key: ValueKey('badge_requirement_${level.name}'),
+            message: message(level, needed, stage: stage),
+            triggerMode: TooltipTriggerMode.tap,
+            showDuration: const Duration(seconds: 6),
+            preferBelow: true,
+            margin: const EdgeInsets.symmetric(horizontal: MaakSpace.xl),
+            padding: const EdgeInsets.all(MaakSpace.md),
+            decoration: BoxDecoration(
+              color: MaakColors.ink,
+              borderRadius: BorderRadius.circular(MaakRadius.card / 1.5),
+            ),
+            textStyle: MaakText.caption.copyWith(
+              color: Colors.white,
+              height: 1.4,
+            ),
+            child: child,
+          );
+        },
+      );
 }

@@ -88,7 +88,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if ((n['kind'] == 'message' ||
             n['kind'] == 'chat_reopen' ||
             n['kind'] == 'restricted' ||
-            n['kind'] == 'restriction_lifted') &&
+            n['kind'] == 'restriction_lifted' ||
+            // Missed voice call: open the chat so they can call back.
+            n['kind'] == 'voice_call_missed') &&
         n['reference_id'] != null) {
       ConversationPage.open(
         context,

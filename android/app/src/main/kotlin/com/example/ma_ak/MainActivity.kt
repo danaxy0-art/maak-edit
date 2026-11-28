@@ -12,6 +12,35 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        createCallChannel()
+    }
+
+    // Incoming voice calls (send-push uses this channel for kind 'voice_call'):
+    // plays the phone's ringtone at ringtone volume, vibrates like a call and
+    // shows on the lock screen. Created on first launch of this version; until
+    // then calls arrive on the normal Ma'ak channel.
+    private fun createCallChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            CALL_CHANNEL_ID,
+            "Incoming voice calls",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Rings when someone calls you on Ma'ak"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 1000, 1000, 1000, 1000, 1000, 1000, 1000)
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            enableLights(true)
+        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 
     // High importance = the notification pops up on screen, plays the default
@@ -42,5 +71,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val CHANNEL_ID = "maak_alerts"
+        const val CALL_CHANNEL_ID = "maak_calls"
     }
 }

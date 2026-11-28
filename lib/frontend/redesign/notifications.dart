@@ -83,7 +83,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if ((n['kind'] == 'message' ||
               n['kind'] == 'chat_reopen' ||
               n['kind'] == 'restricted' ||
-              n['kind'] == 'restriction_lifted') &&
+              n['kind'] == 'restriction_lifted' ||
+              // Missed voice call: open the chat so they can call back.
+              n['kind'] == 'voice_call_missed') &&
           n['reference_id'] != null) {
         ConversationPage.open(
           context,
@@ -207,6 +209,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ? Icons.forum_outlined
                   : n['kind'] == 'support_session'
                   ? Icons.event_outlined
+                  : n['kind'] == 'voice_call_missed'
+                  ? Icons.phone_missed_outlined
                   : Icons.notifications_outlined,
               color: AppColors.primaryNavy,
             ),

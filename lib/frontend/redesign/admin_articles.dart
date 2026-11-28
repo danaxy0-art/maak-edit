@@ -677,7 +677,49 @@ class _ArticleEditorPageState extends State<ArticleEditorPage> {
     }
   }
 
-  /// Asks whether to publish now or keep the article as a draft.
+  /// Editing: "Save changes?" with Cancel / Save, side by side.
+  Future<bool> _confirmSave({required bool published}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Save changes?'),
+        contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              published
+                  ? 'Your changes will be visible to help seekers and volunteers straight away.'
+                  : 'Your changes will be saved. The article stays a draft that only administrators can see.',
+              style: const TextStyle(height: 1.45),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    return confirmed == true;
+  }
+
+  /// Adding: asks whether to publish now or keep the article as a draft.
   /// The two choices sit side by side at equal width (no stacked buttons);
   /// the close button cancels.
   Future<String?> _chooseStatus() {
@@ -755,16 +797,25 @@ class _ArticleEditorPageState extends State<ArticleEditorPage> {
     if (_busy) return;
     setState(() => _requireSource = false);
     if (!_form.currentState!.validate()) return;
-    final status = await _chooseStatus();
+    // Adding: choose Publish or Save as draft. Editing: confirm, and keep the
+    // article's status (Publish / Move to drafts is on the article page).
+    final current =
+        widget.article?['status'] == 'published' ? 'published' : 'draft';
+    final status = _editing ? current : await _chooseStatus();
     if (status == null || !mounted) return;
     if (status == 'published') {
       setState(() => _requireSource = true);
       if (!_form.currentState!.validate()) {
-        setState(() => _error =
-            'Add a source name and link before publishing, or save it as a draft.');
+        setState(() => _error = _editing
+            ? 'This article is published, so it needs a source name and link.'
+            : 'Add a source name and link before publishing, or save it as a draft.');
         return;
       }
     }
+    if (_editing && !await _confirmSave(published: status == 'published')) {
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -930,7 +981,7 @@ class _ArticleEditorPageState extends State<ArticleEditorPage> {
                   FieldErrorNotice(_error!),
                 ],
                 const SizedBox(height: 22),
-                // Opens the Publish / Save as draft dialog.
+                // Adding: Publish / Save as draft. Editing: Save changes?
                 PrimaryButton(
                   _editing ? 'Save changes' : 'Add article',
                   busy: _busy,
