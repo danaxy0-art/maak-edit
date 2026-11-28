@@ -2,6 +2,7 @@
 // where badges appear. Badge levels are derived and authorised in the
 // database; see tests/database/volunteer_badges_test.mjs.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:maak_app/backend/services/volunteer_stats_service.dart';
@@ -29,10 +30,13 @@ Widget _progress(Future<BadgeProgress?> Function() load) => Scaffold(
   ),
 );
 
-/// The progress sentence behind the card's info button.
-String? _info(WidgetTester tester) => tester
+/// The whole text of the card's info popup.
+String? _popup(WidgetTester tester) => tester
     .widget<Tooltip>(find.byKey(const ValueKey('badge_progress_info')))
     .message;
+
+/// The progress sentence: the first line of the info popup.
+String? _info(WidgetTester tester) => _popup(tester)?.split('\n').first;
 
 /// How much of the gradient line into a stage is filled, 0 to 1.
 double? _link(WidgetTester tester, String stage) => tester
@@ -241,11 +245,32 @@ void main() {
         findsNothing,
         reason: 'long explanation removed',
       );
+      // The popup: the sentence, how help seekers count, and the disclaimer.
+      expect(
+        _popup(tester),
+        '$sentence\n'
+        'Each help seeker counts once.\n'
+        'Participation badges are not a medical qualification.',
+      );
       await tester.tap(find.byKey(const ValueKey('badge_progress_info')));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text(sentence), findsOneWidget);
-      await tester.pump(const Duration(seconds: 7));
+      expect(find.textContaining(sentence), findsOneWidget);
+      expect(
+        find.textContaining('not a medical qualification'),
+        findsOneWidget,
+      );
+      // Opened on purpose, it stays until dismissed (readable at any pace);
+      // a tap anywhere else closes it.
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.textContaining(sentence), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump();
       await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.textContaining(sentence),
+        findsNothing,
+        reason: 'closed by a tap elsewhere',
+      );
       // Measured from Beginner (1) to Intermediate (5): (3 - 1) / (5 - 1).
       expect(_link(tester, 'intermediate'), closeTo(0.5, 0.001));
       expect(_link(tester, 'expert'), 0, reason: 'not the next stage yet');
@@ -400,6 +425,114 @@ void main() {
       );
       expect(p!.currentMin, 5);
       expect(p!.towardNext, closeTo(0.5, 1e-9));
+    });
+
+    group('info button accessibility', () {
+      const p = BadgeProgress(
+        supported: 3,
+        badge: BadgeLevel.beginner,
+        next: BadgeLevel.intermediate,
+        nextMin: 5,
+        currentMin: 1,
+      );
+      final button = find.byKey(const ValueKey('badge_progress_info_button'));
+
+      testScreen('a 48 x 48 target around an 18 px icon', (tester) async {
+        await pumpScreen(tester, _progress(() async => p));
+        expect(tester.getSize(button), const Size(48, 48));
+        final icon = tester.widget<Icon>(
+          find.descendant(of: button, matching: find.byType(Icon)),
+        );
+        expect(
+          tester.getSize(
+            find.descendant(of: button, matching: find.byType(Icon)),
+          ),
+          const Size(18, 18),
+        );
+        expect(icon.icon, Icons.info_outline_rounded);
+      });
+
+      testScreen('screen readers: a named button that carries the popup text', (
+        tester,
+      ) async {
+        await pumpScreen(tester, _progress(() async => p));
+        final node = tester.getSemantics(
+          find.bySemanticsLabel(RegExp('About your badge')),
+        );
+        expect(node.label, contains('About your badge'));
+        expect(node.hint, contains('You have supported 3 help seekers.'));
+        expect(node.hint, contains('Each help seeker counts once.'));
+        expect(
+          node.hint,
+          contains('Participation badges are not a medical qualification.'),
+        );
+        expect(node, isSemantics(isButton: true, isFocusable: true));
+      });
+
+      for (final key in [LogicalKeyboardKey.enter, LogicalKeyboardKey.space]) {
+        testScreen('keyboard: Tab reaches it and ${key.keyLabel} opens it', (
+          tester,
+        ) async {
+          await pumpScreen(tester, _progress(() async => p));
+          var focused = false;
+          for (var i = 0; i < 12 && !focused; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+            final ctx = FocusManager.instance.primaryFocus?.context;
+            focused =
+                ctx != null &&
+                find
+                    .ancestor(of: find.byWidget(ctx.widget), matching: button)
+                    .evaluate()
+                    .isNotEmpty;
+          }
+          expect(focused, isTrue, reason: 'reachable with Tab');
+          await tester.sendKeyEvent(key);
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(
+            find.textContaining('Each help seeker counts once.'),
+            findsOneWidget,
+          );
+          await tester.pump(const Duration(seconds: 10));
+        });
+      }
+
+      testScreen('touch: tapping the icon opens the popup', (tester) async {
+        await pumpScreen(tester, _progress(() async => p));
+        await tester.tap(button);
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.textContaining('not a medical qualification'),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 10));
+      });
+
+      testScreen('the card still fits narrow phones and large text', (
+        tester,
+      ) async {
+        for (final width in [320.0, 360.0, 390.0]) {
+          for (final scale in [1.0, 1.3, 2.0]) {
+            await pumpScreen(
+              tester,
+              Scaffold(
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: MyBadgeProgressCard(load: () async => p),
+                ),
+              ),
+              size: Size(width, 1000),
+              textScale: scale,
+            );
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: 'no overflow at ${width.toInt()} px, x$scale',
+            );
+            expect(tester.getSize(button), const Size(48, 48));
+          }
+        }
+      });
     });
 
     testScreen('not a volunteer (server returns null): nothing shown', (

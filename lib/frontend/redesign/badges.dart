@@ -239,6 +239,15 @@ class _MyBadgeProgressCardState extends State<MyBadgeProgressCard> {
     return 'You have supported ${_people(p.supported)}. ${left == 1 ? '1 more' : '$left more'} to earn the ${next.label} badge.';
   }
 
+  static const countsOnce = 'Each help seeker counts once.';
+  static const notMedical =
+      'Participation badges are not a medical qualification.';
+
+  /// The info popup: the progress sentence, how help seekers are counted,
+  /// and what a badge does not mean.
+  static String infoText(BadgeProgress p) =>
+      '${progressText(p)}\n$countsOnce\n$notMedical';
+
   @override
   Widget build(BuildContext context) => FutureBuilder<BadgeProgress?>(
     future: _future,
@@ -282,7 +291,7 @@ class _MyBadgeProgressCardState extends State<MyBadgeProgressCard> {
                     style: MaakText.itemTitle,
                   ),
                 ),
-                _InfoButton(progressText(p)),
+                _InfoButton(infoText(p)),
               ],
             ),
             const SizedBox(height: MaakSpace.md),
@@ -303,8 +312,10 @@ class _MyBadgeProgressCardState extends State<MyBadgeProgressCard> {
   );
 }
 
-/// Small "i" button. Tap (or long-press) shows [message]; screen readers
-/// read it as the button's tooltip without opening anything.
+/// The "i" next to the badge: a real button (focusable, Enter/Space or a
+/// tap opens it, 48 × 48 target around an 18 px icon) that shows [message]
+/// in a popup. Screen readers announce it as "About your badge" with the
+/// popup text.
 class _InfoButton extends StatelessWidget {
   final String message;
   const _InfoButton(this.message);
@@ -312,8 +323,8 @@ class _InfoButton extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
     key: const ValueKey('badge_progress_info'),
     message: message,
-    triggerMode: TooltipTriggerMode.tap,
-    showDuration: const Duration(seconds: 6),
+    // Opened by the button below, so a keyboard opens it the same way.
+    triggerMode: TooltipTriggerMode.manual,
     preferBelow: true,
     margin: const EdgeInsets.symmetric(horizontal: MaakSpace.xl),
     padding: const EdgeInsets.all(MaakSpace.md),
@@ -322,15 +333,35 @@ class _InfoButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(MaakRadius.card / 1.5),
     ),
     textStyle: MaakText.caption.copyWith(color: Colors.white, height: 1.4),
-    child: Semantics(
-      button: true,
-      child: const SizedBox(
-        width: 40,
-        height: 40,
-        child: Icon(
-          Icons.info_outline_rounded,
-          size: 18,
-          color: MaakColors.muted,
+    // The text is announced with the button (below), not a second time.
+    excludeFromSemantics: true,
+    child: Builder(
+      // Opened on purpose, the popup stays until dismissed (readable at any
+      // pace): a tap anywhere else, or Escape, closes it.
+      builder: (context) => TapRegion(
+        onTapOutside: (_) => Tooltip.dismissAllToolTips(),
+        // One node for screen readers: "About your badge", button, then
+        // the popup text as its hint.
+        child: MergeSemantics(
+          child: Semantics(
+            label: 'About your badge',
+            hint: message,
+            child: IconButton(
+              key: const ValueKey('badge_progress_info_button'),
+              onPressed: () => context
+                  .findAncestorStateOfType<TooltipState>()
+                  ?.ensureTooltipVisible(),
+              iconSize: 18,
+              color: MaakColors.muted,
+              // Standard 48 × 48 touch target; the icon itself stays 18 px.
+              constraints: const BoxConstraints(
+                minWidth: kMinInteractiveDimension,
+                minHeight: kMinInteractiveDimension,
+              ),
+              // Named by the Semantics above; the icon itself is decorative.
+              icon: const Icon(Icons.info_outline_rounded),
+            ),
+          ),
         ),
       ),
     ),
