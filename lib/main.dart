@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +19,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Sprint 4 US6: pushes received while the app is closed or in the
+  // background. Firebase allows one such handler for the whole app; add any
+  // other background work to it rather than registering a second one.
+  if (sessionRemindersSupported) {
+    FirebaseMessaging.onBackgroundMessage(sessionRemindersOnBackgroundMessage);
+  }
   await SupabaseService.init();
 
   // Dark status bar icons on every screen (see AppTheme.systemBars).

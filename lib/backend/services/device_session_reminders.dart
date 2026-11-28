@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:ui' show DartPluginRegistrant;
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +25,23 @@ import 'supabase_service.dart';
 // which that handler sends to the Sessions screen (also when the tap launches
 // the app). ChatAlertService leaves notifications on this channel alone when
 // it clears its own.
+
+/// Firebase calls this, in its own isolate, for each push received while the
+/// app is closed or in the background (registered in main.dart). Only Razan's
+/// session pushes matter here: that booking's reminders are canceled. No
+/// network call and no sign-in happen here.
+@pragma('vm:entry-point')
+Future<void> sessionRemindersOnBackgroundMessage(RemoteMessage message) async {
+  if (!sessionRemindersSupported) return;
+  // Plugins implemented in Dart (the notification and preferences plugins on
+  // Android) must be registered in a background isolate.
+  DartPluginRegistrant.ensureInitialized();
+  try {
+    await AppSessionReminders.reminders.handlePush(message.data);
+  } catch (e) {
+    debugPrint('Session reminders: background push: ${e.runtimeType}');
+  }
+}
 
 /// Android only; nothing is scheduled on the web, desktop or iOS.
 bool get sessionRemindersSupported =>
@@ -122,8 +142,13 @@ class PrefsReminderStore implements ReminderStore {
   static const _enabled = 'maak.session_reminders.v1.enabled';
 
   @override
-  Future<String?> readRegistry() async =>
-      (await SharedPreferences.getInstance()).getString(_registry);
+  Future<String?> readRegistry() async {
+    final prefs = await SharedPreferences.getInstance();
+    // The background push handler runs in another isolate with its own
+    // cached copy: read what is on disk, not a copy that may be stale.
+    await prefs.reload();
+    return prefs.getString(_registry);
+  }
 
   @override
   Future<void> writeRegistry(String json) async {

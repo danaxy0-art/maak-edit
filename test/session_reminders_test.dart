@@ -435,6 +435,88 @@ void main() {
     });
   });
 
+  group('session pushes received while the app is closed', () {
+    final b2 = session(
+      id: 'booking-2',
+      start: '2026-11-30T10:00:00Z',
+      end: '2026-11-30T11:00:00Z',
+    );
+
+    test(
+      'a push for a booking cancels only that booking\'s reminders',
+      () async {
+        await sync([session(), b2]);
+        expect(scheduler.scheduled, hasLength(4));
+        final handled = await reminders.handlePush({
+          'kind': 'support_session',
+          'reference_id': 'booking-1',
+          'id': 'notification-1',
+        });
+        expect(handled, isTrue);
+        expect(scheduler.canceled, hasLength(2));
+        expect(scheduler.times, [
+          DateTime.utc(2026, 11, 30, 9),
+          DateTime.utc(2026, 11, 30, 9, 50),
+        ]);
+        expect(store.registry, isNot(contains('"booking-1"')));
+      },
+    );
+
+    test('the next reconcile schedules the moved session again, under the '
+        'same rules', () async {
+      await sync([session()]);
+      await reminders.handlePush({
+        'kind': 'support_session',
+        'reference_id': 'booking-1',
+      });
+      expect(scheduler.scheduled, isEmpty);
+      await sync([
+        session(
+          slot: 'slot-2',
+          start: '2026-11-29T10:00:00Z',
+          end: '2026-11-29T11:00:00Z',
+        ),
+      ]);
+      expect(scheduler.times, [
+        DateTime.utc(2026, 11, 29, 9),
+        DateTime.utc(2026, 11, 29, 9, 50),
+      ]);
+    });
+
+    test(
+      'other pushes, or a session push without a booking, change nothing',
+      () async {
+        await sync([session()]);
+        for (final data in <Map<String, dynamic>>[
+          {'kind': 'message', 'reference_id': 'booking-1'},
+          {'kind': 'voice_call', 'reference_id': 'booking-1'},
+          {'kind': 'support_session'},
+          {'kind': 'support_session', 'reference_id': ''},
+          {},
+        ]) {
+          expect(await reminders.handlePush(data), isFalse);
+        }
+        expect(scheduler.canceled, isEmpty);
+        expect(scheduler.scheduled, hasLength(2));
+      },
+    );
+
+    test(
+      'a push for a booking without reminders (just confirmed) is safe',
+      () async {
+        await sync([session()]);
+        expect(
+          await reminders.handlePush({
+            'kind': 'support_session',
+            'reference_id': 'booking-new',
+          }),
+          isTrue,
+        );
+        expect(scheduler.canceled, isEmpty);
+      },
+    );
+  });
+
   test('unsupported platform: nothing is scheduled or canceled', () async {
     scheduler.isSupported = false;
     await sync([session()]);

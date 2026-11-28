@@ -34,10 +34,19 @@ import 'session_calendar.dart' show SessionCalendarEvent;
 // the phone never moves a reminder, and the text says "in 1 hour" rather than
 // a clock time that could be read in the wrong zone.
 //
-// Limit: a reminder is scheduled on this phone from the last session list it
-// saw. If the OTHER participant cancels or reschedules while this app is not
-// running, the old reminder can still fire; it is corrected the next time
-// the app opens, returns to the foreground, or receives the change.
+// The other participant's changes. Their cancel or reschedule creates one of
+// Razan's support_session notifications for this member, which is pushed.
+// While the app runs, that row triggers a reconcile. While it is closed or
+// in the background, the push itself is handled ([handlePush]): the
+// booking's reminders are canceled on the phone, with no network call.
+//
+// Limits: a push does not carry the new time, so after the other side moves
+// a session the reminders for its new time are scheduled the next time the
+// app opens or returns to the foreground (until then there is no reminder,
+// rather than one at the old time). When the push does not arrive in time (no
+// network, the app force-stopped, or the device not registered for pushes),
+// an old reminder can still fire; it is corrected the next time the app
+// opens.
 
 /// One reminder this device should show.
 @immutable
@@ -241,6 +250,29 @@ class SessionReminders {
   /// Cancels every reminder this device scheduled, for every account (sign
   /// out).
   Future<void> cancelAll() => _run(() => _cancelWhere((_) => true));
+
+  /// Cancels the reminders of booking [bookingId]: it was canceled or moved
+  /// and the new time is not known here (the next [reconcile] schedules the
+  /// reminders of its new time, if it is still confirmed).
+  Future<void> cancelBooking(String bookingId) =>
+      _run(() => _cancelWhere((r) => r.bookingId == bookingId));
+
+  /// Handles the data of a push received while the app is not on screen.
+  /// Razan's session pushes (kind support_session, reference_id = booking)
+  /// mean the booking changed: confirmed, declined, canceled or moved. A
+  /// confirmed booking had no reminders yet, so nothing is lost; for the
+  /// others the old reminders are now wrong. Returns whether anything was
+  /// done.
+  Future<bool> handlePush(Map<String, dynamic> data) async {
+    final booking = data['reference_id'];
+    if (data['kind'] != 'support_session' ||
+        booking is! String ||
+        booking.isEmpty) {
+      return false;
+    }
+    await cancelBooking(booking);
+    return true;
+  }
 
   Future<void> _queue = Future.value();
   Future<void> _run(Future<void> Function() step) {
