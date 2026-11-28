@@ -30,6 +30,8 @@ class ChatAlertService {
   ChatAlertService._();
 
   static final _plugin = FlutterLocalNotificationsPlugin();
+  static FlutterLocalNotificationsPlugin get notificationPlugin => _plugin;
+
   static const _channelId = 'maak_alerts'; // created in MainActivity
   static const _channelName = "Ma'ak notifications";
 
@@ -155,6 +157,7 @@ class ChatAlertService {
   }
 
   static Future<void> _stop() async {
+    final chatIds = _lines.keys.toList();
     final channel = _channel;
     _channel = null;
     _userId = null;
@@ -170,7 +173,9 @@ class ChatAlertService {
     // Nobody else's messages stay on this phone after sign-out.
     if (_initialized) {
       try {
-        await _plugin.cancelAll();
+        for (final requestId in chatIds) {
+          await _plugin.cancel(id: _notificationId(requestId));
+        }
       } catch (_) {}
     }
   }
@@ -303,6 +308,10 @@ class ChatAlertService {
   }
 
   static void _onTap(NotificationResponse response) {
+    if (response.payload?.startsWith('personal_reminder:') == true) {
+      return;
+    }
+
     final requestId = response.payload;
     if (requestId == null || requestId.isEmpty) return;
     unawaited(_clear(requestId));
