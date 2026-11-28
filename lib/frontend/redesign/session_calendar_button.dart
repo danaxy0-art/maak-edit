@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../backend/services/device_session_calendar.dart';
+import '../../backend/services/device_session_reminders.dart';
 import '../../backend/services/session_calendar.dart';
 import '../design/components.dart';
 import '../design/tokens.dart';
@@ -43,6 +44,11 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
     super.initState();
     _state = _initialState();
     _refresh();
+    // US6: a confirmed session appeared on the Sessions screen (for example
+    // just accepted): bring the session reminders up to date. Reminders do
+    // not depend on the calendar; this widget is only where the screen
+    // shows each confirmed session.
+    AppSessionReminders.sessionsChanged();
   }
 
   /// Shown at once for an eligible session ("Add to calendar"), instead of
@@ -74,7 +80,16 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
         _state = _initialState();
       }
       _refresh();
+      AppSessionReminders.sessionsChanged(); // US6: rescheduled
     }
+  }
+
+  @override
+  void dispose() {
+    // US6: canceled, rescheduled by the help seeker (back to pending), or
+    // started: the card no longer shows a confirmed session.
+    AppSessionReminders.sessionsChanged();
+    super.dispose();
   }
 
   Future<void> _refresh() async {

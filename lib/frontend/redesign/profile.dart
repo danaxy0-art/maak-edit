@@ -15,6 +15,7 @@ import 'registration.dart';
 import 'feedback.dart';
 import 'profile_avatar.dart';
 import 'badges.dart'; // Sprint 4: volunteer participation badges
+import 'session_reminder_setting.dart'; // Sprint 4 US6
 
 class ProfilePage extends StatefulWidget {
   final String role;
@@ -499,6 +500,8 @@ class _AccountSettingsPage extends StatelessWidget {
               onTap: () => logout(context),
             ),
           ),
+          // Sprint 4 US6: session reminder opt-out (hidden on the web).
+          const SessionReminderSetting(),
           const SizedBox(height: 20),
           Text(
             'ACCOUNT MANAGEMENT',

@@ -13,6 +13,12 @@
          session. Asked for only when the member taps "Add to calendar". -->
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+    <!-- Sprint 4 US6: session reminders. Restores scheduled reminders after
+         the phone restarts, and lets them be on time when the member allows
+         exact alarms (Settings > Alarms & reminders); without it Android
+         shows them at an approximate time. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <application
         android:label="Ma’ak"
         android:name="${applicationName}"
@@ -47,6 +53,22 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="maak_alerts" />
+        <!-- Sprint 4 US6: flutter_local_notifications shows scheduled
+             session reminders (also when the app is closed) and schedules
+             them again after a restart or an app update. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
