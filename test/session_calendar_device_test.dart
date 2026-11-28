@@ -264,6 +264,102 @@ void main() {
       expect(plugin.createdIn, 'p');
     });
 
+    group('which calendar gets the event', () {
+      Calendar cal(
+        String id, {
+        String? type,
+        bool primary = false,
+        bool hidden = false,
+        bool readOnly = false,
+      }) => Calendar(
+        id: id,
+        name: id,
+        readOnly: readOnly,
+        accountType: type,
+        isPrimary: primary,
+        hidden: hidden,
+      );
+      String? pick(List<Calendar> c) =>
+          DeviceCalendarGateway.pickCalendar(c)?.id;
+
+      test('the Google account\'s main calendar beats a local "My calendar" '
+          'that is also marked primary and listed first', () {
+        expect(
+          pick([
+            cal('my-calendar', type: 'LOCAL', primary: true),
+            cal('google-main', type: 'com.google', primary: true),
+          ]),
+          'google-main',
+        );
+      });
+
+      test('a calendar hidden in the calendar app is used only as a last '
+          'resort', () {
+        expect(
+          pick([
+            cal(
+              'google-hidden',
+              type: 'com.google',
+              primary: true,
+              hidden: true,
+            ),
+            cal('local', type: 'LOCAL'),
+          ]),
+          'local',
+        );
+        expect(
+          pick([cal('only-hidden', type: 'com.google', hidden: true)]),
+          'only-hidden',
+        );
+      });
+
+      test('another synced account (Exchange, Samsung) beats a local one', () {
+        expect(
+          pick([
+            cal('local', type: 'LOCAL', primary: true),
+            cal('exchange', type: 'com.android.exchange', primary: true),
+          ]),
+          'exchange',
+        );
+        expect(
+          pick([
+            cal('local', type: 'LOCAL', primary: true),
+            cal('shared', type: 'com.google'),
+          ]),
+          'shared',
+        );
+      });
+
+      test(
+        'read-only calendars are never picked; none writable gives none',
+        () {
+          expect(
+            pick([
+              cal(
+                'holidays',
+                type: 'com.google',
+                primary: true,
+                readOnly: true,
+              ),
+              cal('local', type: 'LOCAL'),
+            ]),
+            'local',
+          );
+          expect(pick([cal('holidays', readOnly: true)]), isNull);
+        },
+      );
+
+      test('ties keep the phone\'s order', () {
+        expect(
+          pick([
+            cal('first', type: 'com.google', primary: true),
+            cal('second', type: 'com.google', primary: true),
+          ]),
+          'first',
+        );
+      });
+    });
+
     test('no primary writable calendar: the first writable one', () {
       expect(
         DeviceCalendarGateway.pickCalendar(const [

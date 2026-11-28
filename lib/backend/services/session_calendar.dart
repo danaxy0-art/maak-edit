@@ -236,6 +236,11 @@ abstract class CalendarGateway {
   /// from a member's tap.
   Future<CalendarAccess> requestAccess();
 
+  /// Name of the calendar new events go into, once [requestAccess] has
+  /// granted access (null if unknown). Shown with "Added", so the member
+  /// knows which calendar to look in.
+  String? get calendarName;
+
   /// Writes the event with [link] in its link field and returns its id as
   /// soon as the calendar assigns one. Throws if nothing was written.
   Future<String> create(SessionCalendarEvent event, {required String link});

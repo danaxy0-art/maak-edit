@@ -108,7 +108,15 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
     setState(() => _busy = false);
     switch (result) {
       case CalendarAddResult.added:
-        showSuccess(context, 'Added to your calendar.');
+        // Names the calendar, so the member knows where to look (a phone
+        // can have several, and calendar apps may not show all of them).
+        final name = _calendar.gateway.calendarName?.trim();
+        showSuccess(
+          context,
+          name == null || name.isEmpty
+              ? 'Added to your calendar.'
+              : 'Added to your calendar "$name".',
+        );
       case CalendarAddResult.updated:
         showSuccess(context, 'Your calendar now shows the new time.');
       case CalendarAddResult.alreadyAdded:

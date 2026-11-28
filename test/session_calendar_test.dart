@@ -9,6 +9,8 @@ import 'package:maak_app/backend/services/session_calendar.dart';
 class FakeCalendar implements CalendarGateway {
   @override
   bool isSupported = true;
+  @override
+  String? calendarName;
   CalendarAccess access = CalendarAccess.granted;
   bool alreadyGranted = true;
   Object? createError;

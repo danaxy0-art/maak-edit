@@ -107,6 +107,16 @@ void main() {
     expect(calendar.creates, 1);
   });
 
+  testScreen('"Added" names the calendar the event went into', (tester) async {
+    calendar.calendarName = 'sara@gmail.com';
+    await open(tester, [_row('a', 'accepted')]);
+    await tap(tester, find.text('Add to calendar'));
+    expect(
+      find.text('Added to your calendar "sara@gmail.com".'),
+      findsOneWidget,
+    );
+  });
+
   testScreen('busy while saving; repeated taps do not create duplicates', (
     tester,
   ) async {

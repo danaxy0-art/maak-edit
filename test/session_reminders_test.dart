@@ -653,9 +653,15 @@ void main() {
     Map<dynamic, dynamic> lastSchedule() =>
         calls.lastWhere((c) => c.method == 'zonedSchedule').arguments as Map;
 
+    // The plugin refuses past times, so this is relative to the real clock
+    // (a fixed date stops working once it has passed). Whole minutes, as the
+    // plugin sends seconds without fractions.
+    final now = DateTime.now().toUtc();
+    final at = DateTime.utc(now.year, now.month, now.day + 30, 14, 50);
+
     Future<void> scheduleOne() => LocalReminderScheduler().schedule(
       id: 7,
-      atUtc: DateTime.utc(2026, 11, 28, 14, 50),
+      atUtc: at,
       title: SessionReminders.title,
       body: SessionReminders.bodyFor(const Duration(minutes: 10)),
     );
@@ -665,7 +671,11 @@ void main() {
       final args = lastSchedule();
       expect(args['platformSpecifics']['scheduleMode'], 'exactAllowWhileIdle');
       expect(args['timeZoneName'], 'UTC');
-      expect(args['scheduledDateTime'], '2026-11-28T14:50:00');
+      expect(
+        args['scheduledDateTime'],
+        at.toIso8601String().substring(0, 19),
+        reason: 'the exact UTC instant, no shift for the phone\'s time zone',
+      );
       expect(args['id'], 7);
       expect(args['payload'], SessionReminders.tapPayload);
       expect(
