@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:device_calendar_plus/device_calendar_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'session_calendar.dart';
 import 'supabase_service.dart';
@@ -70,7 +71,10 @@ class DeviceCalendarGateway implements CalendarGateway {
   }
 
   @override
-  Future<CreatedCalendarEvent> create(SessionCalendarEvent event) async {
+  Future<String> create(
+    SessionCalendarEvent event, {
+    required String link,
+  }) async {
     final id = await _plugin.createEvent(
       calendarId: _target,
       title: SessionCalendarEvent.title,
@@ -78,19 +82,17 @@ class DeviceCalendarGateway implements CalendarGateway {
       startDate: event.startUtc,
       endDate: event.endUtc,
       description: SessionCalendarEvent.notes,
+      // Opaque recovery token (Android: CUSTOM_APP_URI, iOS: event URL).
+      url: link,
     );
-    // Read it back: "added" is reported only for an event that exists. Some
-    // Android calendars take a moment to return a new event, so a missing
-    // event is checked again briefly before the save counts as failed (a
-    // failure on the first read made members tap again, adding duplicates).
+    // Some Android calendars take a moment to return a new event: wait
+    // briefly until it can be read, so the read-back that follows doesn't
+    // report a failure for an event that was kept.
     for (var attempt = 0; attempt < readBackAttempts; attempt++) {
       if (attempt > 0) await Future<void>.delayed(readBackDelay);
-      final saved = await _find(id);
-      if (saved != null) {
-        return CreatedCalendarEvent(id, calendarId: saved.calendarId);
-      }
+      if (await lookup(id) != null) break;
     }
-    throw StateError('The calendar did not keep the new event.');
+    return id;
   }
 
   /// Read-back checks after creating an event, and the wait between them.
@@ -98,9 +100,19 @@ class DeviceCalendarGateway implements CalendarGateway {
   @visibleForTesting
   static Duration readBackDelay = const Duration(milliseconds: 300);
 
-  Future<Event?> _find(String id) async {
+  @override
+  Future<CalendarEventInfo?> lookup(String eventId) async {
     try {
-      return await _plugin.getEvent(id);
+      final event = await _plugin.getEvent(eventId);
+      return event == null
+          ? null
+          : CalendarEventInfo(
+              calendarId: event.calendarId,
+              link: event.url,
+              title: event.title,
+              startUtc: event.startDate.toUtc(),
+              endUtc: event.endDate.toUtc(),
+            );
     } on DeviceCalendarException catch (e) {
       if (e.errorCode == DeviceCalendarError.notFound) return null;
       rethrow;
@@ -108,21 +120,22 @@ class DeviceCalendarGateway implements CalendarGateway {
   }
 
   @override
-  Future<bool> exists(String eventId) async {
-    try {
-      return await _plugin.getEvent(eventId) != null;
-    } on DeviceCalendarException catch (e) {
-      if (e.errorCode == DeviceCalendarError.notFound) return false;
-      rethrow;
-    }
-  }
-
-  @override
-  Future<bool?> existsWithoutPrompt(String eventId) async {
+  Future<(bool, CalendarEventInfo?)?> lookupWithoutPrompt(
+    String eventId,
+  ) async {
     if (await _plugin.hasPermissions() != CalendarPermissionStatus.granted) {
       return null;
     }
-    return exists(eventId);
+    final info = await lookup(eventId);
+    return (info != null, info);
+  }
+
+  @override
+  Future<String?> findByLink(String link, DateTime from, DateTime to) async {
+    for (final event in await _plugin.listEvents(from, to)) {
+      if (event.url == link) return event.eventId;
+    }
+    return null;
   }
 
   @override
@@ -196,6 +209,8 @@ class AppSessionCalendar {
   static SessionCalendar get instance => _instance ??= SessionCalendar(
     gateway: _gateway,
     store: PrefsSavedSessionStore(),
+    // Random v4 UUID: unique per attempt, meaningless outside this device.
+    newToken: () => const Uuid().v4(),
   );
 
   /// Opens the app's settings (after calendar access was denied).

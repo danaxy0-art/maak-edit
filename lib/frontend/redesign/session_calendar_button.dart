@@ -57,21 +57,31 @@ class _SessionCalendarButtonState extends State<SessionCalendarButton> {
   @override
   void didUpdateWidget(SessionCalendarButton old) {
     super.didUpdateWidget(old);
-    // The list reloaded (for example after a reschedule): label again.
-    if (old.session['id'] != widget.session['id'] ||
-        old.session['slot_id'] != widget.session['slot_id'] ||
-        old.session['starts_at'] != widget.session['starts_at'] ||
-        old.session['status'] != widget.session['status'] ||
-        old.session['display_status'] != widget.session['display_status']) {
-      if (old.session['id'] != widget.session['id']) _state = _initialState();
+    // The list reloaded (for example after a reschedule): label again. The
+    // end time is checked too, although a new end normally means a new slot.
+    const fields = [
+      'id',
+      'slot_id',
+      'starts_at',
+      'ends_at',
+      'status',
+      'display_status',
+    ];
+    final changedSession = old.session['id'] != widget.session['id'];
+    if (old.calendar != widget.calendar ||
+        fields.any((f) => old.session[f] != widget.session[f])) {
+      if (changedSession || old.calendar != widget.calendar) {
+        _state = _initialState();
+      }
       _refresh();
     }
   }
 
   Future<void> _refresh() async {
-    if (!_calendar.gateway.isSupported) return; // web / desktop: never shown
+    final calendar = _calendar;
+    if (!calendar.gateway.isSupported) return; // web / desktop: never shown
     final check = ++_check;
-    final state = await _calendar.stateOf(widget.session);
+    final state = await calendar.stateOf(widget.session);
     if (mounted && check == _check) setState(() => _state = state);
   }
 

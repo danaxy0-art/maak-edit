@@ -56,15 +56,16 @@ class FakePlugin implements DeviceCalendar {
   }) async {
     calls.add('create');
     createdIn = calendarId;
-    final id = 'evt-${events.length + 1}';
+    final id = 'evt-${++_created}';
     if (!dropAfterCreate) {
-      events[id] = _event(id, title, startDate, endDate, description);
+      events[id] = _event(id, title, startDate, endDate, description, url);
     }
-    lastCreate = (title: title, start: startDate, timeZone: timeZone);
+    lastCreate = (title: title, start: startDate, timeZone: timeZone, url: url);
     return id;
   }
 
-  ({String title, DateTime start, String? timeZone})? lastCreate;
+  int _created = 0;
+  ({String title, DateTime start, String? timeZone, String? url})? lastCreate;
   String? createdIn;
 
   /// getEvent returns null this many times before finding the event, like
@@ -79,6 +80,19 @@ class FakePlugin implements DeviceCalendar {
       return null;
     }
     return events[id];
+  }
+
+  @override
+  Future<List<Event>> listEvents(
+    DateTime startDate,
+    DateTime endDate, {
+    List<String>? calendarIds,
+  }) async {
+    calls.add('list');
+    return [
+      for (final e in events.values)
+        if (e.startDate.isBefore(endDate) && e.endDate.isAfter(startDate)) e,
+    ];
   }
 
   @override
@@ -110,6 +124,7 @@ class FakePlugin implements DeviceCalendar {
       startDate ?? old.startDate,
       endDate ?? old.endDate,
       old.description,
+      old.url,
     );
   }
 
@@ -122,12 +137,14 @@ class FakePlugin implements DeviceCalendar {
     DateTime start,
     DateTime end,
     String? description,
+    String? url,
   ) => Event(
     eventId: id,
     instanceId: id,
     calendarId: 'cal-1',
     title: title,
     description: description,
+    url: url,
     startDate: start,
     endDate: end,
     isAllDay: false,
@@ -226,13 +243,14 @@ void main() {
     });
 
     test('checking an event without access never prompts', () async {
-      expect(await gateway.existsWithoutPrompt('evt-1'), isNull);
+      expect(await gateway.lookupWithoutPrompt('evt-1'), isNull);
       expect(plugin.calls, ['has']);
     });
   });
 
   group('events', () {
     final event = SessionCalendarEvent.fromSession(_session(), now: _now)!;
+    final link = recoveryLink('token-1');
     setUp(() => DeviceCalendarGateway.readBackDelay = Duration.zero);
 
     test('goes into the primary writable calendar', () async {
@@ -242,7 +260,7 @@ void main() {
         Calendar(id: 'p', name: 'Personal', readOnly: false, isPrimary: true),
       ];
       expect(await gateway.requestAccess(), CalendarAccess.granted);
-      await gateway.create(event);
+      await gateway.create(event, link: link);
       expect(plugin.createdIn, 'p');
     });
 
@@ -256,50 +274,72 @@ void main() {
       );
     });
 
-    test('a calendar slow to return the new event still counts as saved, '
-        'without a second event', () async {
+    test('a calendar slow to return the new event: create waits until it '
+        'can be read, without a second event', () async {
       plugin.slowReads = 2;
-      final created = await gateway.create(event);
-      expect(created.eventId, 'evt-1');
+      expect(await gateway.create(event, link: link), 'evt-1');
       expect(plugin.calls.where((c) => c == 'create'), hasLength(1));
+      expect(plugin.calls.where((c) => c == 'get'), hasLength(3));
+      expect(await gateway.lookup('evt-1'), isNotNull);
+    });
+
+    test('created with neutral text, the exact instant, no time zone, and only '
+        'the opaque recovery link', () async {
+      expect(await gateway.create(event, link: link), 'evt-1');
+      expect(plugin.lastCreate!.title, "Ma'ak support session");
+      expect(plugin.lastCreate!.start, DateTime.utc(2026, 11, 28, 15));
+      expect(
+        plugin.lastCreate!.timeZone,
+        isNull,
+        reason: 'a time zone would reinterpret the wall-clock time',
+      );
+      expect(plugin.lastCreate!.url, 'maak-session:token-1');
+      expect(plugin.events['evt-1']!.description, SessionCalendarEvent.notes);
     });
 
     test(
-      'created with neutral text and the exact instant, no time zone',
+      'lookup reports the calendar and the link; a missing event is null',
       () async {
-        final created = await gateway.create(event);
-        expect(created.eventId, 'evt-1');
-        expect(created.calendarId, 'cal-1');
-        expect(plugin.lastCreate!.title, "Ma'ak support session");
-        expect(plugin.lastCreate!.start, DateTime.utc(2026, 11, 28, 15));
-        expect(
-          plugin.lastCreate!.timeZone,
-          isNull,
-          reason: 'a time zone would reinterpret the wall-clock time',
-        );
-        expect(plugin.events['evt-1']!.description, SessionCalendarEvent.notes);
+        await gateway.create(event, link: link);
+        final info = await gateway.lookup('evt-1');
+        expect(info!.calendarId, 'cal-1');
+        expect(info.link, link);
+        expect(await gateway.lookup('evt-404'), isNull);
       },
     );
 
-    test(
-      'an id for an event the calendar did not keep is not a save',
-      () async {
-        plugin.dropAfterCreate = true;
-        await expectLater(gateway.create(event), throwsStateError);
-      },
-    );
+    test('found again by its link, only inside the searched window', () async {
+      await gateway.create(event, link: link);
+      expect(
+        await gateway.findByLink(
+          link,
+          DateTime.utc(2026, 11, 27),
+          DateTime.utc(2026, 11, 29),
+        ),
+        'evt-1',
+      );
+      expect(
+        await gateway.findByLink(
+          recoveryLink('token-2'),
+          DateTime.utc(2026, 11, 27),
+          DateTime.utc(2026, 11, 29),
+        ),
+        isNull,
+        reason: 'another booking or account has another token',
+      );
+    });
 
-    test('exists / deleted / update', () async {
-      await gateway.create(event);
-      expect(await gateway.exists('evt-1'), isTrue);
+    test('update moves the event and keeps its link', () async {
+      await gateway.create(event, link: link);
       final moved = SessionCalendarEvent.fromSession(
         _session(slot: 'slot-2', day: 29),
         now: _now,
       )!;
       await gateway.update('evt-1', moved);
       expect(plugin.events['evt-1']!.startDate, DateTime.utc(2026, 11, 29, 15));
+      expect(plugin.events['evt-1']!.url, link);
       plugin.events.clear();
-      expect(await gateway.exists('evt-1'), isFalse);
+      expect(await gateway.lookup('evt-1'), isNull);
     });
   });
 
@@ -309,7 +349,12 @@ void main() {
       final store = PrefsSavedSessionStore(userId: () => user);
       final event = SessionCalendarEvent.fromSession(_session(), now: _now)!;
       await store.write(
-        SavedSessionEvent.of(event, 'evt-1', calendarId: 'cal-1'),
+        SavedSessionEvent.of(
+          event,
+          eventId: 'evt-1',
+          calendarId: 'cal-1',
+          token: 'token-1',
+        ),
       );
       expect((await store.read('booking-1'))!.eventId, 'evt-1');
 
@@ -342,9 +387,11 @@ void main() {
     'end to end with the fake plugin: add, duplicate, reschedule, deleted',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      var n = 0;
       final calendar = SessionCalendar(
         gateway: gateway,
         store: PrefsSavedSessionStore(userId: () => 'user-a'),
+        newToken: () => 'token-${++n}',
       );
       expect(
         await calendar.add(_session(), now: _now),
@@ -365,6 +412,31 @@ void main() {
         CalendarAddResult.added,
       );
       expect(plugin.events, hasLength(1));
+    },
+  );
+
+  test(
+    'end to end: the app stops between writing the event and saving its id; '
+    'the next tap finds it through the real record store, no duplicate',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final store = PrefsSavedSessionStore(userId: () => 'user-a');
+      final event = SessionCalendarEvent.fromSession(_session(), now: _now)!;
+      // What an interrupted first attempt leaves: the saved token, and the
+      // event it wrote.
+      await store.write(SavedSessionEvent.of(event, token: 'token-1'));
+      await gateway.create(event, link: recoveryLink('token-1'));
+      final calendar = SessionCalendar(
+        gateway: gateway,
+        store: store,
+        newToken: () => fail('no new token needed'),
+      );
+      expect(
+        await calendar.add(_session(), now: _now),
+        CalendarAddResult.alreadyAdded,
+      );
+      expect(plugin.events, hasLength(1));
+      expect((await store.read('booking-1'))!.eventId, 'evt-1');
     },
   );
 }
