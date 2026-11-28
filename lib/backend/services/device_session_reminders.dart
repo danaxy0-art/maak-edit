@@ -19,7 +19,8 @@ import 'supabase_service.dart';
 // The plugin itself is initialised by ChatAlertService (Dana's new-message
 // alerts), which owns the tap handler; this file never initialises it again,
 // so her handler stays in place. Reminders carry no payload: tapping one
-// opens the app.
+// opens the app. ChatAlertService leaves notifications on this channel alone
+// when it clears its own.
 
 /// Android only; nothing is scheduled on the web, desktop or iOS.
 bool get sessionRemindersSupported =>
@@ -32,7 +33,7 @@ class LocalReminderScheduler implements ReminderScheduler {
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
   final FlutterLocalNotificationsPlugin _plugin;
 
-  static const channelId = 'maak_session_reminders';
+  static const channelId = SessionReminders.channelId;
   static const channelName = 'Session reminders';
 
   AndroidFlutterLocalNotificationsPlugin? get _android => _plugin

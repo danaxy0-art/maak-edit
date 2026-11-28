@@ -141,6 +141,11 @@ class SessionReminders {
   final ReminderScheduler scheduler;
   final ReminderStore store;
 
+  /// Android notification channel of the reminders (Settings shows it as
+  /// "Session reminders"). Other notification code leaves this channel's
+  /// notifications alone.
+  static const channelId = 'maak_session_reminders';
+
   /// Reminders before each confirmed session, longest first.
   static const leadTimes = [Duration(hours: 1), Duration(minutes: 10)];
 

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../chat/chat_media_policy.dart';
 import 'push_notification_service.dart';
+import 'session_reminders.dart' show SessionReminders;
 import 'supabase_service.dart';
 
 /// New-message alerts built without Firebase Cloud Messaging.
@@ -168,7 +169,25 @@ class ChatAlertService {
       } catch (_) {}
     }
     // Nobody else's messages stay on this phone after sign-out.
-    if (_initialized) {
+    if (_initialized) await _clearShown();
+  }
+
+  /// Removes every notification on screen except session reminders (Sprint 4
+  /// US6). cancelAll() would also delete the reminders scheduled for later,
+  /// and this runs at every start and sign-in, not only at sign-out;
+  /// SessionReminders cancels its own on sign-out. If the list cannot be
+  /// read, everything is cleared as before.
+  @visibleForTesting
+  static Future<void> clearShownForTesting() => _clearShown();
+
+  static Future<void> _clearShown() async {
+    try {
+      for (final n in await _plugin.getActiveNotifications()) {
+        final id = n.id;
+        if (id == null || n.channelId == SessionReminders.channelId) continue;
+        await _plugin.cancel(id: id, tag: n.tag);
+      }
+    } catch (_) {
       try {
         await _plugin.cancelAll();
       } catch (_) {}

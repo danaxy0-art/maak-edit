@@ -29,8 +29,7 @@ Future<void> main() async {
   PushNotificationService.init();
   // New chat message alerts: Supabase Realtime + local notifications (no FCM).
   // Sprint 4 US6: reminders before confirmed sessions, scheduled on the phone.
-  // Started after the chat alerts, which initialise the notification plugin
-  // and clear its notifications when they (re)start.
+  // Started after the chat alerts, which initialise the notification plugin.
   ChatAlertService.init().whenComplete(AppSessionReminders.init);
   // Sends a member to the restricted screen as soon as an admin blocks them.
   AccountStatusWatcher.start();
